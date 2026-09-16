@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import math
 from math import radians, sin, cos, sqrt, atan2, degrees
 import re
 import io
@@ -13,7 +12,7 @@ import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 logo_path = os.path.join(current_dir, "FSS Logo.png")
 icon_path = os.path.join(current_dir, "icon.ico")
-result_img_path = os.path.join(current_dir, "result.jpg")
+result_img_path = os.path.join(current_dir, "result.png")
 
 # ==========================================
 # 1. CONFIGURATION & CONSTANTS
@@ -75,31 +74,26 @@ ENHANCED_KALIANPUR_ZONES = {
     'Zone IIa': {'epsg': 24379, 'bounds': {'lat_min': 21.0, 'lat_max': 28.01, 'lon_min': 68.13, 'lon_max': 82.01}, 'description': 'Northwest India (Rajasthan, Gujarat, West MP, South UP)', 'central_meridian': 75.0},
     'Zone IIb': {'epsg': 24380, 'bounds': {'lat_min': 21.0, 'lat_max': 29.47, 'lon_min': 82.0, 'lon_max': 97.42}, 'description': 'Northeast India (Assam, Meghalaya, Manipur, Mizoram)', 'central_meridian': 90.0},
     'Zone IIIa': {'epsg': 24381, 'bounds': {'lat_min': 15.0, 'lat_max': 21.01, 'lon_min': 70.14, 'lon_max': 87.15}, 'description': 'Central India (Maharashtra, East MP, Chhattisgarh)', 'central_meridian': 78.0},
-    'Zone IIIb': {'epsg': 24382, 'bounds': {'lat_min': 15.0, 'lat_max': 21.01, 'lon_min': 87.15, 'lon_max': 97.42}, 'description': 'East Central India (Jharkhand, Odisha, East Bengal)', 'central_meridian': 92.0},
     'Zone IVa': {'epsg': 24383, 'bounds': {'lat_min': 8.02, 'lat_max': 15.01, 'lon_min': 73.94, 'lon_max': 80.4}, 'description': 'Southwest India (Karnataka, Kerala, Tamil Nadu West)', 'central_meridian': 77.0},
-    'Zone IVb': {'epsg': 24384, 'bounds': {'lat_min': 8.02, 'lat_max': 15.01, 'lon_min': 80.4, 'lon_max': 87.18}, 'description': 'Southeast India (Andhra Pradesh, Tamil Nadu East)', 'central_meridian': 84.0},
-    'Zone Va': {'epsg': 24385, 'bounds': {'lat_min': 5.0, 'lat_max': 8.02, 'lon_min': 73.94, 'lon_max': 80.4}, 'description': 'Far South India (South Kerala, South Tamil Nadu)', 'central_meridian': 77.0},
-    'Zone Vb': {'epsg': 24386, 'bounds': {'lat_min': 5.0, 'lat_max': 8.02, 'lon_min': 80.4, 'lon_max': 87.18}, 'description': 'Far Southeast India (South Tamil Nadu, South Andhra)', 'central_meridian': 84.0}
 }
 
 DSM_LCC_ZONES = {
-    "5C": {"epsg": 2001, "extent": (68.00, 36.00, 76.00, 42.00)}, "5D": {"epsg": 2007, "extent": (68.00, 30.00, 76.00, 36.00)},
-    "5E": {"epsg": 2013, "extent": (68.00, 24.00, 76.00, 30.00)}, "5F": {"epsg": 2019, "extent": (68.00, 18.00, 76.00, 24.00)},
-    "5G": {"epsg": 2025, "extent": (68.00, 12.00, 76.00, 18.00)}, "5H": {"epsg": 2031, "extent": (68.00, 6.00, 76.00, 12.00)},
-    "6C": {"epsg": 2002, "extent": (76.00, 36.00, 84.00, 42.00)}, "6D": {"epsg": 2008, "extent": (76.00, 30.00, 84.00, 36.00)},
-    "6E": {"epsg": 2014, "extent": (76.00, 24.00, 84.00, 30.00)}, "6F": {"epsg": 2020, "extent": (76.00, 18.00, 84.00, 24.00)},
-    "6G": {"epsg": 2026, "extent": (76.00, 12.00, 84.00, 18.00)}, "6H": {"epsg": 2032, "extent": (76.00, 6.00, 84.00, 12.00)},
-    "7C": {"epsg": 2003, "extent": (84.00, 36.00, 92.00, 42.00)}, "7D": {"epsg": 2009, "extent": (84.00, 30.00, 92.00, 36.00)},
-    "7E": {"epsg": 2015, "extent": (84.00, 24.00, 92.00, 30.00)}, "7F": {"epsg": 2021, "extent": (84.00, 18.00, 92.00, 24.00)},
-    "7G": {"epsg": 2027, "extent": (84.00, 12.00, 92.00, 18.00)}, "7H": {"epsg": 2033, "extent": (84.00, 6.00, 92.00, 12.00)},
-    "8C": {"epsg": 2004, "extent": (92.00, 36.00, 100.00, 42.00)}, "8D": {"epsg": 2010, "extent": (92.00, 30.00, 100.00, 36.00)},
-    "8E": {"epsg": 2016, "extent": (92.00, 24.00, 100.00, 30.00)}, "8F": {"epsg": 2022, "extent": (92.00, 18.00, 100.00, 24.00)},
-    "8G": {"epsg": 2028, "extent": (92.00, 12.00, 100.00, 18.00)}, "8H": {"epsg": 2034, "extent": (92.00, 6.00, 100.00, 12.00)},
+    "5C": {"extent": (68.00, 36.00, 76.00, 42.00)}, "5D": {"extent": (68.00, 30.00, 76.00, 36.00)},
+    "5E": {"extent": (68.00, 24.00, 76.00, 30.00)}, "5F": {"extent": (68.00, 18.00, 76.00, 24.00)},
+    "5G": {"extent": (68.00, 12.00, 76.00, 18.00)}, "5H": {"extent": (68.00, 6.00, 76.00, 12.00)},
+    "6C": {"extent": (76.00, 36.00, 84.00, 42.00)}, "6D": {"extent": (76.00, 30.00, 84.00, 36.00)},
+    "6E": {"extent": (76.00, 24.00, 84.00, 30.00)}, "6F": {"extent": (76.00, 18.00, 84.00, 24.00)},
+    "6G": {"extent": (76.00, 12.00, 84.00, 18.00)}, "6H": {"extent": (76.00, 6.00, 84.00, 12.00)},
+    "7C": {"extent": (84.00, 36.00, 92.00, 42.00)}, "7D": {"extent": (84.00, 30.00, 92.00, 36.00)},
+    "7E": {"extent": (84.00, 24.00, 92.00, 30.00)}, "7F": {"extent": (84.00, 18.00, 92.00, 24.00)},
+    "7G": {"extent": (84.00, 12.00, 92.00, 18.00)}, "7H": {"extent": (84.00, 6.00, 92.00, 12.00)},
+    "8C": {"extent": (92.00, 36.00, 100.00, 42.00)}, "8D": {"extent": (92.00, 30.00, 100.00, 36.00)},
+    "8E": {"extent": (92.00, 24.00, 100.00, 30.00)}, "8F": {"extent": (92.00, 18.00, 100.00, 24.00)},
+    "8G": {"extent": (92.00, 12.00, 100.00, 18.00)}, "8H": {"extent": (92.00, 6.00, 100.00, 12.00)},
 }
 
 WGS84_ZONES = {
     'India Northeast': {'epsg': 7771, 'bounds': {'lat_min': 21.94, 'lat_max': 29.47, 'lon_min': 89.69, 'lon_max': 97.42}},
-    'India NSF LCC': {'epsg': 7755, 'bounds': {'lat_min': 3.87, 'lat_max': 35.51, 'lon_min': 65.6, 'lon_max': 97.42}},
     'Uttar Pradesh': {'epsg': 7775, 'bounds': {'lat_min': 25.0, 'lat_max': 31.5, 'lon_min': 78.0, 'lon_max': 84.0}},
     'Kerala': {'epsg': 7781, 'bounds': {'lat_min': 8.0, 'lat_max': 13.0, 'lon_min': 74.0, 'lon_max': 77.0}},
     'Lakshadweep': {'epsg': 7782, 'bounds': {'lat_min': 10.0, 'lat_max': 13.0, 'lon_min': 71.0, 'lon_max': 74.0}},
@@ -107,6 +101,7 @@ WGS84_ZONES = {
     'Jammu and Kashmir': {'epsg': 7764, 'bounds': {'lat_min': 32.0, 'lat_max': 37.0, 'lon_min': 73.0, 'lon_max': 78.0}},
     'Gujarat': {'epsg': 7761, 'bounds': {'lat_min': 20.0, 'lat_max': 24.0, 'lon_min': 68.0, 'lon_max': 74.0}},
     'Maharashtra': {'epsg': 7767, 'bounds': {'lat_min': 17.0, 'lat_max': 22.0, 'lon_min': 72.0, 'lon_max': 80.0}},
+    'India NSF LCC': {'epsg': 7755, 'bounds': {'lat_min': 3.87, 'lat_max': 35.51, 'lon_min': 65.6, 'lon_max': 97.42}},
 }
 
 DSM_PARAMS = {
@@ -124,9 +119,24 @@ def validate_input(input_str):
     if not input_str or str(input_str).strip() == "":
         return None
     try:
-        return float(str(input_str).strip())
+        value = float(str(input_str).strip())
+        return value if math_isfinite(value) else None
     except ValueError:
         return None
+
+def math_isfinite(value):
+    """Return True only for finite numeric values."""
+    return not (value != value or value in (float("inf"), float("-inf")))
+
+def validate_lat_lon(lat, lon):
+    """Validate WGS84 latitude/longitude values and return an error message."""
+    if lat is None or lon is None:
+        return "Please enter valid numeric coordinates."
+    if not -90 <= lat <= 90:
+        return "Latitude must be between -90 and 90 degrees."
+    if not -180 <= lon <= 180:
+        return "Longitude must be between -180 and 180 degrees."
+    return None
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
@@ -135,6 +145,7 @@ def haversine(lat1, lon1, lat2, lon2):
     dlat = lat2_rad - lat1_rad
     dlon = lon2_rad - lon1_rad
     a = sin(dlat / 2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon / 2)**2
+    a = min(1.0, max(0.0, a))
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return round(R * c, 3)
 
@@ -150,10 +161,12 @@ def bearing_latlon(lat1, lon1, lat2, lon2):
     return round(bearing_deg, 2)
 
 def format_bearing(bearing_deg):
-    degrees_part = int(bearing_deg)
-    minutes_float = (bearing_deg - degrees_part) * 60
-    minutes_part = int(minutes_float)
-    seconds_part = round((minutes_float - minutes_part) * 60, 1)
+    total_seconds = round((bearing_deg % 360) * 3600, 1)
+    if total_seconds >= 360 * 3600:
+        total_seconds = 0.0
+    degrees_part = int(total_seconds // 3600)
+    minutes_part = int((total_seconds % 3600) // 60)
+    seconds_part = total_seconds % 60
     return f"{degrees_part}°{minutes_part}'{seconds_part}\""
 
 def decimal_to_dms(decimal_degrees, coord_type):
@@ -168,18 +181,31 @@ def decimal_to_dms(decimal_degrees, coord_type):
         direction = 'E' if decimal_degrees >= 0 else 'W'
     return f"{degrees}°{minutes}'{seconds:.2f}\"{direction}"
 
-def dms_to_decimal(dms_str):
-    pattern = r"(\d+)°(\d+)'(\d+(?:\.\d+)?)\"?([NSEW])"
-    match = re.match(pattern, dms_str.strip())
+def dms_to_decimal(dms_str, coord_type=None):
+    pattern = r"^\s*(\d{1,3})\s*[°º]\s*(\d{1,2})\s*['′]\s*(\d+(?:\.\d+)?)\s*[\"″]?\s*([NSEWnsew])\s*$"
+    match = re.match(pattern, str(dms_str))
     if not match:
         raise ValueError(f"Invalid DMS format: {dms_str}")
     degrees, minutes, seconds, hemisphere = match.groups()
-    decimal = float(degrees) + float(minutes) / 60 + float(seconds) / 3600
+    degrees, minutes, seconds = int(degrees), int(minutes), float(seconds)
+    hemisphere = hemisphere.upper()
+    if minutes >= 60 or seconds >= 60:
+        raise ValueError("DMS minutes and seconds must be less than 60")
+    if coord_type == "lat" and hemisphere not in ("N", "S"):
+        raise ValueError("Latitude hemisphere must be N or S")
+    if coord_type == "lon" and hemisphere not in ("E", "W"):
+        raise ValueError("Longitude hemisphere must be E or W")
+    maximum = 90 if hemisphere in ("N", "S") else 180
+    if degrees > maximum or (degrees == maximum and (minutes or seconds)):
+        raise ValueError(f"Degrees exceed the valid {maximum}° limit")
+    decimal = degrees + minutes / 60 + seconds / 3600
     if hemisphere in ['S', 'W']:
         decimal = -decimal
     return decimal
 
 def detect_kalianpur_zone(lat, lon):
+    if validate_lat_lon(lat, lon):
+        return None, None, None
     # 1. Exact Match
     for zone_name, zone_info in ENHANCED_KALIANPUR_ZONES.items():
         bounds = zone_info['bounds']
@@ -206,11 +232,13 @@ def detect_kalianpur_zone(lat, lon):
     return None, None, None
 
 def detect_dsm_zone(lat, lon):
+    if validate_lat_lon(lat, lon):
+        return None, None
     # Exact Match
     for zone_name, zone_info in DSM_LCC_ZONES.items():
         extent = zone_info['extent']
         if extent[1] <= lat <= extent[3] and extent[0] <= lon <= extent[2]:
-            return zone_name, zone_info['epsg']
+            return zone_name, None
             
     # Nearest Match
     best_zone = None
@@ -227,11 +255,13 @@ def detect_dsm_zone(lat, lon):
             best_zone = (zone_name, zone_info)
             
     if best_zone and min_dist < 0.5:
-        return f"{best_zone[0]} (Nearest)", best_zone[1]['epsg']
+        return f"{best_zone[0]} (Nearest)", None
         
     return None, None
 
 def detect_wgs84_zone(lat, lon):
+    if validate_lat_lon(lat, lon):
+        return None, None
     # Exact Match
     for zone_name, zone_info in WGS84_ZONES.items():
         bounds = zone_info['bounds']
@@ -323,8 +353,9 @@ with tabs[0]:
             l1, ln1 = validate_input(lat1), validate_input(lon1)
             l2, ln2 = validate_input(lat2), validate_input(lon2)
             
-            if None in [l1, ln1, l2, ln2]:
-                st.error("Please enter valid numeric coordinates.")
+            validation_error = validate_lat_lon(l1, ln1) or validate_lat_lon(l2, ln2)
+            if validation_error:
+                st.error(validation_error)
             else:
                 dist_km = haversine(l1, ln1, l2, ln2)
                 bearing = bearing_latlon(l1, ln1, l2, ln2)
@@ -351,8 +382,11 @@ with tabs[0]:
             st.error(f"Error: {e}")
 
     if detect_pressed:
-        try:
-            l1, ln1 = validate_input(lat1), validate_input(lon1)
+        l1, ln1 = validate_input(lat1), validate_input(lon1)
+        validation_error = validate_lat_lon(l1, ln1)
+        if validation_error:
+            st.error(validation_error)
+        else:
             k_zone, k_epsg, desc = detect_kalianpur_zone(l1, ln1)
             dsm_zone, dsm_epsg = detect_dsm_zone(l1, ln1)
             w_zone, w_epsg = detect_wgs84_zone(l1, ln1)
@@ -362,7 +396,7 @@ with tabs[0]:
                 <h4>🔍 Zone Detection (Point A)</h4>
                 <ul>
                     <li><b>Kalianpur:</b> {k_zone} (EPSG:{k_epsg}) - {desc}</li>
-                    <li><b>DSM Zone:</b> {dsm_zone} (EPSG:{dsm_epsg})</li>
+                    <li><b>DSM Zone:</b> {dsm_zone} (custom DSM definition)</li>
                     <li><b>WGS84 Region:</b> {w_zone} (EPSG:{w_epsg})</li>
                 </ul>
             </div>
@@ -371,8 +405,6 @@ with tabs[0]:
             # Show map in detection as well if useful
             if os.path.exists(result_img_path):
                 st.image(result_img_path, caption="Reference Map", use_container_width=True)
-        except:
-            st.error("Invalid input for Point A")
 
 # --- TAB 2: GRID CALCULATION ---
 with tabs[1]:
@@ -421,13 +453,14 @@ with tabs[2]:
     if st.button("Convert to DMS"):
         try:
             vlat, vlon = validate_input(dd_lat), validate_input(dd_lon)
-            if vlat is not None and vlon is not None:
+            validation_error = validate_lat_lon(vlat, vlon)
+            if not validation_error:
                 dms_lat = decimal_to_dms(vlat, 'lat')
                 dms_lon = decimal_to_dms(vlon, 'lon')
                 st.success(f"Latitude: {dms_lat}")
                 st.success(f"Longitude: {dms_lon}")
             else:
-                st.error("Invalid Input")
+                st.error(validation_error)
         except Exception as e:
             st.error(e)
 
@@ -440,8 +473,8 @@ with tabs[3]:
     
     if st.button("Convert to Decimal"):
         try:
-            res_lat = dms_to_decimal(dms_in_lat)
-            res_lon = dms_to_decimal(dms_in_lon)
+            res_lat = dms_to_decimal(dms_in_lat, "lat")
+            res_lon = dms_to_decimal(dms_in_lon, "lon")
             st.success(f"Latitude: {res_lat:.6f}°")
             st.success(f"Longitude: {res_lon:.6f}°")
             
@@ -464,7 +497,12 @@ with tabs[4]:
     if st.button("Convert to Grid"):
         try:
             v_lat, v_lon = validate_input(l_lat), validate_input(l_lon)
-            v_h = validate_input(l_h) or 0.0
+            v_h = validate_input(l_h)
+            validation_error = validate_lat_lon(v_lat, v_lon)
+            if validation_error:
+                raise ValueError(validation_error)
+            if v_h is None:
+                v_h = 0.0
             
             # Detect zone
             kz, ke, _ = detect_kalianpur_zone(v_lat, v_lon)
@@ -490,6 +528,11 @@ with tabs[4]:
 with tabs[5]:
     st.markdown('<div class="header-style">↩️ Indian Grid to WGS84 Lat/Lon</div>', unsafe_allow_html=True)
     
+    grid_zone = st.selectbox(
+        "Source Kalianpur Zone",
+        list(ENHANCED_KALIANPUR_ZONES.keys()),
+        key="grid_to_latlon_zone",
+    )
     cg1, cg2, cg3 = st.columns(3)
     with cg1: g_e = st.text_input("Easting (m)", "3877983.50")
     with cg2: g_n = st.text_input("Northing (m)", "756073.40")
@@ -498,15 +541,19 @@ with tabs[5]:
     if st.button("Convert to Lat/Lon"):
         try:
             ve, vn = validate_input(g_e), validate_input(g_n)
-            vh = validate_input(g_h) or 0.0
-            
-            # Assumption: Input is Zone I (EPSG:24378) as per original logic if not specified
-            transformer = Transformer.from_crs("epsg:24378", "epsg:4326", always_xy=True)
+            vh = validate_input(g_h)
+            if ve is None or vn is None:
+                raise ValueError("Easting and northing must be valid finite numbers.")
+            if vh is None:
+                vh = 0.0
+
+            source_epsg = ENHANCED_KALIANPUR_ZONES[grid_zone]["epsg"]
+            transformer = Transformer.from_crs(f"epsg:{source_epsg}", "epsg:4326", always_xy=True)
             wgs_lon, wgs_lat = transformer.transform(ve, vn)
             
             st.markdown(f"""
             <div class="result-box">
-                <h4>📍 WGS84 Result</h4>
+                <h4>📍 WGS84 Result ({grid_zone}, EPSG:{source_epsg})</h4>
                 <p><b>Latitude:</b> {wgs_lat:.6f}° ({decimal_to_dms(wgs_lat, 'lat')})</p>
                 <p><b>Longitude:</b> {wgs_lon:.6f}° ({decimal_to_dms(wgs_lon, 'lon')})</p>
             </div>
@@ -702,6 +749,11 @@ with tabs[10]:
     st.download_button("📥 Download CSV Template", template_data, "template.csv", "text/csv")
     
     uploaded_file = st.file_uploader("Upload CSV", type=['csv'])
+    batch_zone = st.selectbox(
+        "Source Kalianpur Zone",
+        list(ENHANCED_KALIANPUR_ZONES.keys()),
+        key="batch_source_zone",
+    )
     
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
@@ -712,9 +764,17 @@ with tabs[10]:
             progress_bar = st.progress(0)
             
             try:
-                # Assuming Indian Grid Zone I (24378) for batch as per typical use case, 
-                # or we could add a selector. Using 24378 based on main.py logic.
-                t = Transformer.from_crs("epsg:24378", "epsg:4326", always_xy=True)
+                required_columns = {"easting", "northing"}
+                missing_columns = required_columns.difference(df.columns)
+                if missing_columns:
+                    raise ValueError(
+                        "Missing required column(s): " + ", ".join(sorted(missing_columns))
+                    )
+                if df.empty:
+                    raise ValueError("The uploaded CSV contains no data rows.")
+
+                source_epsg = ENHANCED_KALIANPUR_ZONES[batch_zone]["epsg"]
+                t = Transformer.from_crs(f"epsg:{source_epsg}", "epsg:4326", always_xy=True)
                 
                 for i, row in df.iterrows():
                     try:
@@ -828,13 +888,14 @@ with tabs[11]:
 
         # Accuracy feedback
         if acc <= 2:
-            acc_status = "Excellent (Survey Grade)"
+            acc_status = "Excellent (High Accuracy)"
         elif acc <= 10:
             acc_status = "Good (GPS)"
         else:
             acc_status = "Low (Approximate)"
         
         st.success(f"Location Acquired. Accuracy: ±{acc:.1f}m ({acc_status})")
+        st.caption("Browser/device location is not a substitute for a calibrated survey-grade GNSS receiver.")
 
         # 1. Geographic Coordinates
         st.subheader("1. Geographic Coordinates (WGS84)")
@@ -875,7 +936,7 @@ with tabs[11]:
             t_dsm = Transformer.from_crs("epsg:4326", dsm_crs, always_xy=True)
             de, dn = t_dsm.transform(lon, lat)
             
-            st.write(f"**Zone:** {dz} (EPSG:{de_epsg})")
+            st.write(f"**Zone:** {dz} (custom DSM definition)")
             c5, c6 = st.columns(2)
             c5.metric("Easting", f"{de:.3f}")
             c6.metric("Northing", f"{dn:.3f}")
@@ -897,7 +958,7 @@ with tabs[12]:
             st.expander(f"{k} (EPSG:{v['epsg']})").write(f"Bounds: {v['bounds']}\n\nDesc: {v['description']}")
     elif z_type == "DSM LCC":
         for k, v in DSM_LCC_ZONES.items():
-            st.write(f"**Zone {k}**: EPSG {v['epsg']} | Extent: {v['extent']}")
+            st.write(f"**Zone {k}**: Custom DSM definition | Extent: {v['extent']}")
     else:
         for k, v in WGS84_ZONES.items():
             st.write(f"**{k}**: EPSG {v['epsg']}")

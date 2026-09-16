@@ -1,4 +1,4 @@
 streamlit
-pyproj
+pyproj>=3.1
 pandas
 streamlit-js-eval

@@ -12,7 +12,7 @@ from pathlib import Path
 from pyproj import CRS, Transformer
 from pyproj.crs import ProjectedCRS
 from pyproj.crs.coordinate_operation import LambertConformalConic2SPConversion
-from pyproj.exceptions import ProjError
+from pyproj.exceptions import CRSError, ProjError
 
 
 KALIANPUR_EPSG = {
@@ -22,6 +22,13 @@ KALIANPUR_EPSG = {
     "Zone IIIa": 24381,
     "Zone IVa": 24383,
 }
+
+ORIGINAL_ZONE_CATALOG = json.loads(
+    (Path(__file__).resolve().parent / "data" / "legacy_zone_catalog.json").read_text(encoding="utf-8")
+)
+# Preserve original labels and identifiers independently of calculation CRSs.
+KALIANPUR_ZONE_CATALOG = ORIGINAL_ZONE_CATALOG["zones"]["Kalianpur 1975"]
+DSM_ZONE_CATALOG = ORIGINAL_ZONE_CATALOG["zones"]["DSM"]
 
 DSM_TABLE = json.loads(
     (Path(__file__).resolve().parent / "data" / "dsm_zones.json").read_text(encoding="utf-8")
@@ -46,10 +53,63 @@ DSM_ZONES = {
 }
 
 
+def zone_definition_issue(system, zone):
+    """Explain missing definitions without dropping historical catalog entries."""
+    if system == "Kalianpur 1975":
+        catalog, definitions = KALIANPUR_ZONE_CATALOG, KALIANPUR_EPSG
+        required = "the authoritative projection parameters and datum transformation to WGS84"
+    elif system == "DSM":
+        catalog, definitions = DSM_ZONE_CATALOG, DSM_ZONES
+        required = "the DSM parameter-table row; this zone is absent from the supplied photo"
+    else:
+        raise ValueError(f"Unknown grid system: {system}")
+    if zone in definitions:
+        return None
+    if zone not in catalog:
+        return f"Unsupported {system} zone: {zone}; no catalog entry or definition is available."
+    code = catalog[zone]["epsg"]
+    return (
+        f"Parameters required for {system} {zone}. The zone and original identifier "
+        f"EPSG:{code} are retained in the catalog. That identifier does not define this "
+        f"grid. Supply {required} to complete this conversion."
+    )
+
+
+@lru_cache(maxsize=None)
+def original_identifier_name(code):
+    """Registry identity for reference display only, never transformation routing."""
+    try:
+        return CRS.from_epsg(code).name
+    except CRSError:
+        return "No CRS record in the installed EPSG registry"
+
+
+def zone_reference_rows(system):
+    catalog = ORIGINAL_ZONE_CATALOG["zones"][system]
+    rows = []
+    for zone, original in catalog.items():
+        issue = zone_definition_issue(system, zone)
+        if issue:
+            calculation = "Source parameters required"
+        elif system == "DSM":
+            calculation = "WGS84 / LCC 2SP (supplied parameter table)"
+        else:
+            calculation = f"EPSG:{KALIANPUR_EPSG[zone]}"
+        rows.append({
+            "Zone": zone,
+            "Original identifier": f"EPSG:{original['epsg']}",
+            "Registry meaning of original identifier": original_identifier_name(original["epsg"]),
+            "Conversion definition": calculation,
+            "Status": "Parameters required" if issue else "Ready",
+        })
+    return rows
+
+
 @lru_cache(maxsize=None)
 def kalianpur_crs(zone):
-    if zone not in KALIANPUR_EPSG:
-        raise ValueError(f"Unsupported Kalianpur 1975 zone: {zone}")
+    issue = zone_definition_issue("Kalianpur 1975", zone)
+    if issue:
+        raise ValueError(issue)
     code = KALIANPUR_EPSG[zone]
     crs = CRS.from_epsg(code)
     expected_name = f"Kalianpur 1975 / India zone {zone.removeprefix('Zone ')}"
@@ -149,8 +209,9 @@ def kalianpur_to_wgs84(easting, northing, zone):
 @lru_cache(maxsize=None)
 def dsm_crs(zone):
     """Build a custom WGS84 LCC 2SP CRS; never invent an EPSG identifier."""
-    if zone not in DSM_ZONES:
-        raise ValueError(f"Unsupported DSM zone: {zone}; it is not in the supplied table.")
+    issue = zone_definition_issue("DSM", zone)
+    if issue:
+        raise ValueError(issue)
     p = DSM_ZONES[zone]
     # The 2SP definition already determines central scale. Passing the printed
     # factor as k_0 would add a second scaling (PROJ's Michigan variant).

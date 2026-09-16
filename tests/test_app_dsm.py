@@ -69,7 +69,7 @@ class AppDsmTests(unittest.TestCase):
             self.app.selectbox("batch_dsm_source").select("8E")
             labeled(self.app.button, "Start Batch Processing (Grid -> Lat/Lon)").click().run()
         self.assertFalse(self.app.exception)
-        results = self.app.dataframe[-1].value
+        results = next(x.value for x in self.app.dataframe if "status" in x.value.columns)
         self.assertEqual(results.iloc[0]["source_zone"], "8E")
         self.assertAlmostEqual(results.iloc[0]["lat"], 27 + 25.04/3600, delta=1e-10)
         self.assertAlmostEqual(results.iloc[0]["lon"], 96, delta=1e-10)
@@ -81,7 +81,7 @@ class AppDsmTests(unittest.TestCase):
             self.app.selectbox("batch_operation").select("WGS84 -> DSM grid").run()
             labeled(self.app.button, "Start Batch Processing").click().run()
         self.assertFalse(self.app.exception)
-        results = self.app.dataframe[-1].value
+        results = next(x.value for x in self.app.dataframe if "status" in x.value.columns)
         self.assertEqual(results.iloc[0]["target_zone"], "6D")
         self.assertAlmostEqual(results.iloc[0]["easting"], 310676.546960736, delta=.001)
         self.assertTrue(results.iloc[1]["status"].startswith("Error:"))
@@ -98,7 +98,7 @@ class AppDsmTests(unittest.TestCase):
                     self.app.selectbox("batch_operation").select(operation).run()
                     labeled(self.app.button, "Start Batch Processing").click().run()
                 self.assertFalse(self.app.exception)
-                result = self.app.dataframe[-1].value.iloc[0]
+                result = next(x.value for x in self.app.dataframe if "status" in x.value.columns).iloc[0]
                 self.assertEqual(result["status"], "Success")
                 self.assertEqual(result["target_zone"], target)
                 self.assertEqual(result["datum_accuracy_m"], 22)
@@ -120,6 +120,30 @@ class AppDsmTests(unittest.TestCase):
         self.assertEqual(table.iloc[0]["Latitude of origin (D M S, N)"], "39 00 39.60")
         self.assertEqual(table.iloc[0]["Central scale (reference)"], "0.9993035")
         self.assertNotIn("7C", table["Zone"].tolist())
+        catalog = self.app.dataframe[-2].value.set_index("Zone")
+        self.assertEqual(len(catalog), 24)
+        self.assertEqual(catalog.loc["7C", "Original identifier"], "EPSG:2003")
+        self.assertEqual(catalog.loc["7C", "Status"], "Parameters required")
+        self.assertEqual(catalog.loc["5C", "Status"], "Ready")
+
+    def test_all_dsm_selectors_keep_missing_parameter_entries(self):
+        expected = [f"{column}{band}" for column in "5678" for band in "CDEFGH"]
+        for key in ["dsm_latlon_source", "dsm_esm_source"]:
+            self.assertEqual(self.app.selectbox(key).options, expected)
+        for key in ["esm_dsm_target", "position_dsm_zone"]:
+            self.assertEqual(self.app.selectbox(key).options[1:], expected)
+        self.app.selectbox("forward_grid_system").select("DSM (WGS84 LCC)").run()
+        self.assertEqual(self.app.selectbox("forward_dsm_zone").options[1:], expected)
+        self.app.selectbox("batch_operation").select("DSM grid -> WGS84").run()
+        self.assertEqual(self.app.selectbox("batch_dsm_source").options, expected)
+
+    def test_original_dsm_identifier_is_retained_without_using_foreign_crs(self):
+        self.app.selectbox("dsm_latlon_source").select("7C")
+        labeled(self.app.button, "Convert DSM -> Lat/Lon").click().run()
+        self.assertFalse(self.app.exception)
+        self.assertTrue(any("EPSG:2003" in x.value and "Parameters required" in x.value
+                            for x in self.app.error))
+        self.assertFalse(self.app.success)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,8 @@ A Streamlit web application for surveying and geodetic calculations, including:
 - CSV batch conversion, including DSM and ESM conversions in both directions
 - browser-based position display
 
+All 14 application tabs are retained. The zone catalog and selectors preserve all **9 original Kalianpur entries and 24 original DSM entries**, including their original identifiers. Calculation definitions are tracked separately so a historical identifier cannot silently select an unrelated grid.
+
 ## Run locally
 
 ```bash
@@ -55,7 +57,18 @@ Checked with pyproj 3.8.0, PROJ 9.8.1, and EPSG v12.029 (2025-10-02):
 | Kalianpur 1975 IIIb → EPSG:24382 | Kalianpur **1880** / India zone **IIb** |
 | Kalianpur IVb, Va, Vb → EPSG:24384–24386 | No CRS records in the tested EPSG registry |
 
-All 24 former DSM EPSG assignments were unrelated Caribbean or Canadian grids. Those assignments have been removed. DSM now uses the 18 zones in the user-supplied parameter table, with custom CRS names and no invented EPSG identifiers.
+All 24 former DSM EPSG assignments identify unrelated Caribbean or Canadian grids. **Every original assignment is retained** in [data/legacy_zone_catalog.json](data/legacy_zone_catalog.json), recovered from the original `app.py` at commit `85600eb`. This includes the original bounds, descriptions, meridians, and former custom DSM parameters. The archive is reference data; calculations use separately verified definitions. DSM conversions currently use the 18 zones in the user-supplied parameter table with custom CRS names.
+
+### Complete catalog and remaining parameter gaps
+
+**Zone List** displays the original identifier, its actual registry meaning, the calculation definition, and whether parameters are ready. The complete original catalog can be downloaded as JSON. Source-zone selectors retain all original entries; DSM target selectors also retain all 24 entries. Selecting an entry without parameters explains exactly what is missing. It does not remove the entry, substitute another zone, or submit its mismatched identifier to the projection engine.
+
+| System | Definitions available for conversion | Original entries awaiting source parameters |
+| --- | --- | --- |
+| Kalianpur 1975 | I, IIa, IIb, IIIa, IVa | IIIb, IVb, Va, Vb |
+| DSM | All 18 rows in the supplied photo | 7C, 7D, 7G, 7H, 8C, 8D |
+
+To complete those conversions, the remaining DSM entries need their authoritative projection-table rows, including datum, origin, standard parallels, and false offsets. The remaining Kalianpur entries need authoritative projection parameters **and** a datum transformation to WGS84. The old identifiers alone do not supply this information. Neighboring rows are not extrapolated into purported official definitions. Automatic conversion continues to use only available definitions; the original bounds are preserved as historical metadata, not evidence of valid coverage.
 
 The previous custom DSM definition used `+proj=tmerc` (Transverse Mercator), despite the UI label “LCC”, and an unnamed datum specified only by ellipsoid axes. PROJ could construct only a ballpark datum operation to/from WGS84, with unknown accuracy. Removing the false EPSG labels did not repair that transformation.
 
@@ -96,7 +109,7 @@ The source table contains no boundary polygons. Automatic suggestions use nomina
 - **ESM to DSM / DSM to ESM:** conversions pass through WGS84 and retain the existing Kalianpur datum accuracy information. Unsupported Kalianpur locations are rejected.
 - **Batch Process:** choose one of the five operations. WGS84 input uses `lat,lon`; grid input uses `easting,northing`. Exports retain source/target zone and CRS labels. Failed rows remain explicit errors.
 - **Own Position:** DSM output uses the supplied parameters, with a zone override available.
-- **Zone List → DSM:** view all 18 original parameter rows and download the reference as CSV.
+- **Zone List → DSM:** view all 24 original identifiers and their calculation status, followed by the 18 supplied parameter rows. Download the complete original catalog as JSON or the supplied parameter reference as CSV.
 
 The mathematics is checked independently against the [EPSG 9802 equations documented by GDAL](https://gdal.org/en/stable/proj_list/lambert_conic_conformal_2sp.html), the origin coordinates, standard-parallel scales, and forward/inverse round trips. The photo contains no independent surveyed control points. **These are verified calculations from the supplied table, not certification of field accuracy.** A known point with its DSM zone, full grid coordinates, and independently established WGS84 latitude/longitude is still needed for an external check. DSM↔WGS84 uses the same datum; conversions involving Kalianpur retain the approximately 22 m datum-transformation limitation noted above. No vertical datum transformation is performed.
 
@@ -106,4 +119,4 @@ The mathematics is checked independently against the [EPSG 9802 equations docume
 python -m unittest discover -s tests -v
 ```
 
-The tests cover registry identity, all five Kalianpur zones, the 18 DSM image rows, origin and scale checks, an independent LCC formula, forward/inverse and ESM/DSM chains, rejected coverage and non-finite values, Streamlit screens, batch exports, and DSM position output. Numerical fixtures and mathematical origin checks are not independently surveyed control points.
+The tests cover preservation of all 33 original zone identifiers, complete selectors and reference views, separation of historical identifiers from conversion definitions, all five verified Kalianpur zones, the 18 DSM image rows, origin and scale checks, an independent LCC formula, forward/inverse and ESM/DSM chains, missing definitions and non-finite values, Streamlit screens, batch exports, and DSM position output. Numerical fixtures and mathematical origin checks are not independently surveyed control points.

@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from math import radians, sin, cos, sqrt, atan2, degrees
 import re
+import json
 import os
 
 # ==========================================
@@ -33,10 +34,12 @@ except ImportError:
 
 try:
     from geodesy import (
-        DSM_TABLE, DSM_ZONES, ENHANCED_KALIANPUR_ZONES,
+        DSM_TABLE, DSM_ZONES, DSM_ZONE_CATALOG, ENHANCED_KALIANPUR_ZONES,
+        KALIANPUR_ZONE_CATALOG, ORIGINAL_ZONE_CATALOG,
         detect_dsm_zone, dsm_to_kalianpur, dsm_to_wgs84, dsm_zone_candidates,
         detect_kalianpur_zone, kalianpur_to_dsm, kalianpur_to_wgs84,
         kalianpur_transformer, wgs84_to_dsm, wgs84_to_kalianpur,
+        zone_definition_issue, zone_reference_rows,
     )
 except ImportError:
     st.error("⚠️ Library 'pyproj' is missing. Please run: `pip install pyproj`")
@@ -237,13 +240,31 @@ DSM_SYSTEM = "DSM (WGS84 LCC)"
 DSM_AUTO = "Auto (nominal zone)"
 DSM_NOTE = (
     "Uses the 18-zone parameter table you supplied and WGS84/LCC. "
+    "All 24 original zone entries are retained in the catalog. "
     "Confirm the zone printed on your map sheet. Heights are unchanged."
 )
 
 
+def show_zone_definition_status(system, zone):
+    issue = zone_definition_issue(system, zone)
+    if issue:
+        st.info(issue)
+
+
+def show_zone_catalog(system):
+    st.caption("Every original identifier is retained. The conversion definition column identifies what the calculator actually uses.")
+    catalog = pd.DataFrame(zone_reference_rows(system))
+    st.dataframe(catalog, hide_index=True)
+    st.download_button("Download complete original zone catalog",
+                       json.dumps(ORIGINAL_ZONE_CATALOG, indent=2),
+                       "original_zone_catalog.json", "application/json", key="original_catalog_download")
+
+
 def dsm_target_selector(key, label="Target DSM zone"):
-    value = st.selectbox(label, [DSM_AUTO, *DSM_ZONES], key=key)
-    st.caption("Auto uses nominal 8° × 6° bands. On a shared boundary, select the map sheet zone.")
+    value = st.selectbox(label, [DSM_AUTO, *DSM_ZONE_CATALOG], key=key)
+    st.caption("Auto uses nominal 8° × 6° bands with supplied parameters. On a shared boundary, select the map sheet zone.")
+    if value != DSM_AUTO:
+        show_zone_definition_status("DSM", value)
     return None if value == DSM_AUTO else value
 
 
@@ -260,8 +281,9 @@ def show_dsm_result(zone, easting, northing):
 
 
 def show_dsm_reference():
+    show_zone_catalog("DSM")
     st.caption(DSM_NOTE)
-    st.caption(f"Datum reference: [Survey of India]({DSM_TABLE['datum_source']}). Custom zone definitions; no EPSG identifiers are assigned.")
+    st.caption(f"Datum reference: [Survey of India]({DSM_TABLE['datum_source']}). Conversions use custom LCC definitions; original identifiers are preserved in the catalog above.")
     st.caption("Central scale factors are implied by the two standard parallels and are not multiplied again.")
     rows = []
     for p in DSM_ZONES.values():
@@ -515,9 +537,10 @@ with tabs[5]:
     
     grid_zone = st.selectbox(
         "Source Kalianpur Zone",
-        list(ENHANCED_KALIANPUR_ZONES.keys()),
+        list(KALIANPUR_ZONE_CATALOG),
         key="grid_to_latlon_zone",
     )
+    show_zone_definition_status("Kalianpur 1975", grid_zone)
     cg1, cg2, cg3 = st.columns(3)
     with cg1: g_e = st.text_input("Easting (m)", "3877983.50")
     with cg2: g_n = st.text_input("Northing (m)", "756073.40")
@@ -532,8 +555,8 @@ with tabs[5]:
             if vh is None:
                 vh = 0.0
 
-            source_epsg = ENHANCED_KALIANPUR_ZONES[grid_zone]["epsg"]
             wgs_lon, wgs_lat = kalianpur_to_wgs84(ve, vn, grid_zone)
+            source_epsg = ENHANCED_KALIANPUR_ZONES[grid_zone]["epsg"]
             show_kalianpur_accuracy(grid_zone)
             
             st.markdown(f"""
@@ -550,7 +573,8 @@ with tabs[5]:
 with tabs[6]:
     st.markdown('<div class="header-style">🔄 ESM Grid to DSM Grid</div>', unsafe_allow_html=True)
     st.caption(DSM_NOTE)
-    esm_source_zone = st.selectbox("Source ESM zone", list(ENHANCED_KALIANPUR_ZONES), key="esm_dsm_source")
+    esm_source_zone = st.selectbox("Source ESM zone", list(KALIANPUR_ZONE_CATALOG), key="esm_dsm_source")
+    show_zone_definition_status("Kalianpur 1975", esm_source_zone)
     esm_target_zone = dsm_target_selector("esm_dsm_target")
     esm_e = st.text_input("ESM Easting (m)", "3877983.50", key="esm_dsm_e")
     esm_n = st.text_input("ESM Northing (m)", "756073.40", key="esm_dsm_n")
@@ -566,7 +590,8 @@ with tabs[7]:
     st.markdown('<div class="header-style">↩️ DSM Grid to WGS84 Lat/Lon</div>', unsafe_allow_html=True)
     st.caption(DSM_NOTE)
     st.caption("Enter full metre coordinates. Shortened grid references also require their grid-square identification.")
-    dsm_source_zone = st.selectbox("Source DSM zone", list(DSM_ZONES), index=7, key="dsm_latlon_source")
+    dsm_source_zone = st.selectbox("Source DSM zone", list(DSM_ZONE_CATALOG), index=7, key="dsm_latlon_source")
+    show_zone_definition_status("DSM", dsm_source_zone)
     dsm_e = st.text_input("DSM Easting (m)", "500000", key="dsm_latlon_e")
     dsm_n = st.text_input("DSM Northing (m)", "500000", key="dsm_latlon_n")
     if st.button("Convert DSM -> Lat/Lon"):
@@ -580,7 +605,8 @@ with tabs[7]:
 with tabs[8]:
     st.markdown('<div class="header-style">↩️ DSM Grid to ESM Grid</div>', unsafe_allow_html=True)
     st.caption(DSM_NOTE)
-    dsm_esm_zone = st.selectbox("Source DSM zone", list(DSM_ZONES), index=7, key="dsm_esm_source")
+    dsm_esm_zone = st.selectbox("Source DSM zone", list(DSM_ZONE_CATALOG), index=7, key="dsm_esm_source")
+    show_zone_definition_status("DSM", dsm_esm_zone)
     dsm_esm_e = st.text_input("DSM Easting (m)", "500000", key="dsm_esm_e")
     dsm_esm_n = st.text_input("DSM Northing (m)", "500000", key="dsm_esm_n")
     if st.button("Convert DSM -> ESM"):
@@ -651,10 +677,12 @@ with tabs[10]:
     batch_from_wgs = batch_operation.startswith("WGS84")
     batch_to_dsm = batch_operation.endswith("-> DSM grid")
     if batch_from_dsm:
-        batch_dsm_source = st.selectbox("Source DSM zone", list(DSM_ZONES), index=7, key="batch_dsm_source")
+        batch_dsm_source = st.selectbox("Source DSM zone", list(DSM_ZONE_CATALOG), index=7, key="batch_dsm_source")
+        show_zone_definition_status("DSM", batch_dsm_source)
         st.caption("All uploaded rows must use this source DSM zone and full metre coordinates.")
     elif not batch_from_wgs:
-        batch_zone = st.selectbox("Source Kalianpur Zone", list(ENHANCED_KALIANPUR_ZONES), key="batch_source_zone")
+        batch_zone = st.selectbox("Source Kalianpur Zone", list(KALIANPUR_ZONE_CATALOG), key="batch_source_zone")
+        show_zone_definition_status("Kalianpur 1975", batch_zone)
     if batch_to_dsm:
         batch_dsm_target = dsm_target_selector("batch_dsm_target")
     if "DSM" in batch_operation:
@@ -691,10 +719,12 @@ with tabs[10]:
                         raise ValueError("Missing required column(s): " + ", ".join(sorted(missing)))
                     if df.empty:
                         raise ValueError("The uploaded CSV contains no data rows.")
-                    if not batch_from_dsm and not batch_from_wgs:
+                    if not batch_from_dsm and not batch_from_wgs and batch_zone in ENHANCED_KALIANPUR_ZONES:
                         show_kalianpur_accuracy(batch_zone)
                     for i, row in df.iterrows():
                         result = {"point_id": row.get("point_id", f"P{i}"), "height": row.get("height", 0)}
+                        if not batch_from_wgs:
+                            result["source_zone"] = batch_dsm_source if batch_from_dsm else batch_zone
                         try:
                             if batch_operation == "Kalianpur grid -> WGS84":
                                 lon, lat = kalianpur_to_wgs84(row["easting"], row["northing"], batch_zone)
@@ -872,9 +902,16 @@ with tabs[12]:
     z_type = st.radio("Select System", ["Kalianpur 1975", DSM_SYSTEM, "WGS84"])
     
     if z_type == "Kalianpur 1975":
-        st.caption("Areas below are EPSG bounding boxes, not exact coverage polygons. Confirm the source map datum and zone.")
-        for k, v in ENHANCED_KALIANPUR_ZONES.items():
-            st.expander(f"{k} (EPSG:{v['epsg']})").write(f"Bounds: {v['bounds']}\n\nDesc: {v['description']}")
+        show_zone_catalog("Kalianpur 1975")
+        st.caption("Verified areas are EPSG bounding boxes, not exact coverage polygons. Original metadata is retained separately for reference.")
+        for zone, original in KALIANPUR_ZONE_CATALOG.items():
+            with st.expander(f"{zone} (original identifier EPSG:{original['epsg']})"):
+                verified = ENHANCED_KALIANPUR_ZONES.get(zone)
+                if verified:
+                    st.write(f"Verified bounds: {verified['bounds']}\n\nDescription: {verified['description']}")
+                else:
+                    show_zone_definition_status("Kalianpur 1975", zone)
+                st.write({"Original metadata (reference only)": original})
     elif z_type == DSM_SYSTEM:
         show_dsm_reference()
     else:

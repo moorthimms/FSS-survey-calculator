@@ -69,7 +69,7 @@ class GeodesyTests(unittest.TestCase):
 
     def test_unregistered_or_wrong_datum_zone_labels_are_rejected(self):
         for zone in ["Zone IIIb", "Zone IVb", "Zone Va", "Zone Vb", "Zone I (Nearest)"]:
-            with self.subTest(zone=zone), self.assertRaisesRegex(ValueError, "Unsupported"):
+            with self.subTest(zone=zone), self.assertRaisesRegex(ValueError, "Parameters required|Unsupported"):
                 kalianpur_crs(zone)
 
     def test_obviously_wrong_inverse_zone_is_rejected(self):

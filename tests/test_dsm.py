@@ -113,9 +113,9 @@ class DsmTests(unittest.TestCase):
                 wgs84_to_dsm(lat, lon)
         self.assertEqual(wgs84_to_dsm(30, 78, "6D")[0], "6D")
 
-    def test_unlisted_zones_and_invalid_numbers_are_rejected(self):
+    def test_missing_definitions_and_invalid_numbers_are_rejected(self):
         for zone in ["7C", "7D", "7G", "7H", "8C", "8D", "9E", "2001"]:
-            with self.subTest(zone=zone), self.assertRaisesRegex(ValueError, "Unsupported DSM"):
+            with self.subTest(zone=zone), self.assertRaisesRegex(ValueError, "Parameters required|Unsupported DSM"):
                 dsm_to_wgs84(500000, 500000, zone)
         for bad in [None, "bad", float("nan"), float("inf"), float("-inf")]:
             for args in [(bad, 77), (10, bad)]:

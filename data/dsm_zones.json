@@ -1,0 +1,192 @@
+{
+  "source": "User-supplied DSM GRID ZONE PARAMETERS table, 20260916_102204.jpg",
+  "source_image_sha256": "726ec29c5cd9c2f292a37d88342899b8820fde0db23ec6248e4e013b897f4411",
+  "angle_format": "degrees minutes seconds; latitude north and longitude east",
+  "datum": "WGS84",
+  "datum_source": "https://surveyofindia.gov.in/pages/publications",
+  "projection": "Lambert Conformal Conic (2SP)",
+  "scale_note": "The printed central scale is a rounded reference check implied by the two standard parallels, not an additional multiplier.",
+  "bounds_note": "The supplied table does not define zone boundaries. Nominal 8-degree by 6-degree bounds are used only for automatic suggestions.",
+  "zones": [
+    {
+      "zone": "5C",
+      "longitude_of_origin_dms": "72 00 00",
+      "latitude_of_origin_dms": "39 00 39.60",
+      "standard_parallel_1_dms": "36 51 26",
+      "standard_parallel_2_dms": "41 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993035
+    },
+    {
+      "zone": "5D",
+      "longitude_of_origin_dms": "72 00 00",
+      "latitude_of_origin_dms": "33 00 31.84",
+      "standard_parallel_1_dms": "30 51 26",
+      "standard_parallel_2_dms": "35 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.999304
+    },
+    {
+      "zone": "5E",
+      "longitude_of_origin_dms": "72 00 00",
+      "latitude_of_origin_dms": "27 00 25.04",
+      "standard_parallel_1_dms": "24 51 26",
+      "standard_parallel_2_dms": "29 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993044
+    },
+    {
+      "zone": "5F",
+      "longitude_of_origin_dms": "72 00 00",
+      "latitude_of_origin_dms": "21 00 18.90",
+      "standard_parallel_1_dms": "18 51 26",
+      "standard_parallel_2_dms": "23 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993048
+    },
+    {
+      "zone": "5G",
+      "longitude_of_origin_dms": "72 00 00",
+      "latitude_of_origin_dms": "15 00 13.21",
+      "standard_parallel_1_dms": "12 51 26",
+      "standard_parallel_2_dms": "17 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993051
+    },
+    {
+      "zone": "5H",
+      "longitude_of_origin_dms": "72 00 00",
+      "latitude_of_origin_dms": "09 00 07.82",
+      "standard_parallel_1_dms": "06 51 26",
+      "standard_parallel_2_dms": "11 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993053
+    },
+    {
+      "zone": "6C",
+      "longitude_of_origin_dms": "80 00 00",
+      "latitude_of_origin_dms": "39 00 39.60",
+      "standard_parallel_1_dms": "36 51 26",
+      "standard_parallel_2_dms": "41 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993035
+    },
+    {
+      "zone": "6D",
+      "longitude_of_origin_dms": "80 00 00",
+      "latitude_of_origin_dms": "33 00 31.84",
+      "standard_parallel_1_dms": "30 51 26",
+      "standard_parallel_2_dms": "35 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.999304
+    },
+    {
+      "zone": "6E",
+      "longitude_of_origin_dms": "80 00 00",
+      "latitude_of_origin_dms": "27 00 25.04",
+      "standard_parallel_1_dms": "24 51 26",
+      "standard_parallel_2_dms": "29 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993044
+    },
+    {
+      "zone": "6F",
+      "longitude_of_origin_dms": "80 00 00",
+      "latitude_of_origin_dms": "21 00 18.90",
+      "standard_parallel_1_dms": "18 51 26",
+      "standard_parallel_2_dms": "23 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993048
+    },
+    {
+      "zone": "6G",
+      "longitude_of_origin_dms": "80 00 00",
+      "latitude_of_origin_dms": "15 00 13.21",
+      "standard_parallel_1_dms": "12 51 26",
+      "standard_parallel_2_dms": "17 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993051
+    },
+    {
+      "zone": "6H",
+      "longitude_of_origin_dms": "80 00 00",
+      "latitude_of_origin_dms": "09 00 07.82",
+      "standard_parallel_1_dms": "06 51 26",
+      "standard_parallel_2_dms": "11 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993053
+    },
+    {
+      "zone": "7E",
+      "longitude_of_origin_dms": "88 00 00",
+      "latitude_of_origin_dms": "27 00 25.04",
+      "standard_parallel_1_dms": "24 51 26",
+      "standard_parallel_2_dms": "29 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993044
+    },
+    {
+      "zone": "7F",
+      "longitude_of_origin_dms": "88 00 00",
+      "latitude_of_origin_dms": "21 00 18.90",
+      "standard_parallel_1_dms": "18 51 26",
+      "standard_parallel_2_dms": "23 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993048
+    },
+    {
+      "zone": "8E",
+      "longitude_of_origin_dms": "96 00 00",
+      "latitude_of_origin_dms": "27 00 25.04",
+      "standard_parallel_1_dms": "24 51 26",
+      "standard_parallel_2_dms": "29 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993044
+    },
+    {
+      "zone": "8F",
+      "longitude_of_origin_dms": "96 00 00",
+      "latitude_of_origin_dms": "21 00 18.90",
+      "standard_parallel_1_dms": "18 51 26",
+      "standard_parallel_2_dms": "23 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993048
+    },
+    {
+      "zone": "8G",
+      "longitude_of_origin_dms": "96 00 00",
+      "latitude_of_origin_dms": "15 00 13.21",
+      "standard_parallel_1_dms": "12 51 26",
+      "standard_parallel_2_dms": "17 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993051
+    },
+    {
+      "zone": "8H",
+      "longitude_of_origin_dms": "96 00 00",
+      "latitude_of_origin_dms": "09 00 07.82",
+      "standard_parallel_1_dms": "06 51 26",
+      "standard_parallel_2_dms": "11 08 34",
+      "false_easting_m": 500000,
+      "false_northing_m": 500000,
+      "central_scale_factor_reference": 0.9993053
+    }
+  ]
+}

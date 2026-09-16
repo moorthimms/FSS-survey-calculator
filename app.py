@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from math import radians, sin, cos, sqrt, atan2, degrees
 import re
-import io
 import os
 
 # ==========================================
@@ -34,9 +33,10 @@ except ImportError:
 
 try:
     from geodesy import (
-        DSM_UNAVAILABLE_REASON, ENHANCED_KALIANPUR_ZONES,
-        detect_kalianpur_zone, kalianpur_to_wgs84,
-        kalianpur_transformer, wgs84_to_kalianpur,
+        DSM_TABLE, DSM_ZONES, ENHANCED_KALIANPUR_ZONES,
+        detect_dsm_zone, dsm_to_kalianpur, dsm_to_wgs84, dsm_zone_candidates,
+        detect_kalianpur_zone, kalianpur_to_dsm, kalianpur_to_wgs84,
+        kalianpur_transformer, wgs84_to_dsm, wgs84_to_kalianpur,
     )
 except ImportError:
     st.error("⚠️ Library 'pyproj' is missing. Please run: `pip install pyproj`")
@@ -71,23 +71,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- LEGACY DSM INDEX AND REGIONAL REFERENCES ---
-# DSM extents are retained for reference only; conversions are unverified.
-
-DSM_ZONES = {
-    "5C": {"extent": (68.00, 36.00, 76.00, 42.00)}, "5D": {"extent": (68.00, 30.00, 76.00, 36.00)},
-    "5E": {"extent": (68.00, 24.00, 76.00, 30.00)}, "5F": {"extent": (68.00, 18.00, 76.00, 24.00)},
-    "5G": {"extent": (68.00, 12.00, 76.00, 18.00)}, "5H": {"extent": (68.00, 6.00, 76.00, 12.00)},
-    "6C": {"extent": (76.00, 36.00, 84.00, 42.00)}, "6D": {"extent": (76.00, 30.00, 84.00, 36.00)},
-    "6E": {"extent": (76.00, 24.00, 84.00, 30.00)}, "6F": {"extent": (76.00, 18.00, 84.00, 24.00)},
-    "6G": {"extent": (76.00, 12.00, 84.00, 18.00)}, "6H": {"extent": (76.00, 6.00, 84.00, 12.00)},
-    "7C": {"extent": (84.00, 36.00, 92.00, 42.00)}, "7D": {"extent": (84.00, 30.00, 92.00, 36.00)},
-    "7E": {"extent": (84.00, 24.00, 92.00, 30.00)}, "7F": {"extent": (84.00, 18.00, 92.00, 24.00)},
-    "7G": {"extent": (84.00, 12.00, 92.00, 18.00)}, "7H": {"extent": (84.00, 6.00, 92.00, 12.00)},
-    "8C": {"extent": (92.00, 36.00, 100.00, 42.00)}, "8D": {"extent": (92.00, 30.00, 100.00, 36.00)},
-    "8E": {"extent": (92.00, 24.00, 100.00, 30.00)}, "8F": {"extent": (92.00, 18.00, 100.00, 24.00)},
-    "8G": {"extent": (92.00, 12.00, 100.00, 18.00)}, "8H": {"extent": (92.00, 6.00, 100.00, 12.00)},
-}
+# --- REGIONAL REFERENCES ---
 
 WGS84_ZONES = {
     'India Northeast': {'epsg': 7771, 'bounds': {'lat_min': 21.94, 'lat_max': 29.47, 'lon_min': 89.69, 'lon_max': 97.42}},
@@ -193,17 +177,6 @@ def dms_to_decimal(dms_str, coord_type=None):
         decimal = -decimal
     return decimal
 
-def detect_dsm_zone(lat, lon):
-    if validate_lat_lon(lat, lon):
-        return None, None
-    # Exact Match
-    for zone_name, zone_info in DSM_ZONES.items():
-        extent = zone_info['extent']
-        if extent[1] <= lat <= extent[3] and extent[0] <= lon <= extent[2]:
-            return zone_name, None
-            
-    return None, None
-
 def detect_wgs84_zone(lat, lon):
     if validate_lat_lon(lat, lon):
         return None, None
@@ -259,6 +232,53 @@ def show_kalianpur_accuracy(zone):
         )
     else:
         st.caption("Datum transformation accuracy is not specified by PROJ.")
+
+DSM_SYSTEM = "DSM (WGS84 LCC)"
+DSM_AUTO = "Auto (nominal zone)"
+DSM_NOTE = (
+    "Uses the 18-zone parameter table you supplied and WGS84/LCC. "
+    "Confirm the zone printed on your map sheet. Heights are unchanged."
+)
+
+
+def dsm_target_selector(key, label="Target DSM zone"):
+    value = st.selectbox(label, [DSM_AUTO, *DSM_ZONES], key=key)
+    st.caption("Auto uses nominal 8° × 6° bands. On a shared boundary, select the map sheet zone.")
+    return None if value == DSM_AUTO else value
+
+
+def show_dsm_result(zone, easting, northing):
+    st.markdown(f"""
+    <div class="result-box">
+        <h4>DSM Grid Result ({zone})</h4>
+        <p><b>Reference:</b> WGS84 / LCC, supplied DSM zone {zone}</p>
+        <p><b>Easting:</b> {easting:,.3f} m</p>
+        <p><b>Northing:</b> {northing:,.3f} m</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.code(f"{zone}: E {easting:.3f} m, N {northing:.3f} m", language="text")
+
+
+def show_dsm_reference():
+    st.caption(DSM_NOTE)
+    st.caption(f"Datum reference: [Survey of India]({DSM_TABLE['datum_source']}). Custom zone definitions; no EPSG identifiers are assigned.")
+    st.caption("Central scale factors are implied by the two standard parallels and are not multiplied again.")
+    rows = []
+    for p in DSM_ZONES.values():
+        rows.append({
+            "Zone": p["zone"], "Longitude of origin (D M S, E)": p["longitude_of_origin_dms"],
+            "Latitude of origin (D M S, N)": p["latitude_of_origin_dms"],
+            "Parallel 1 (D M S, N)": p["standard_parallel_1_dms"],
+            "Parallel 2 (D M S, N)": p["standard_parallel_2_dms"],
+            "False easting (m)": p["false_easting_m"], "False northing (m)": p["false_northing_m"],
+            "Central scale (reference)": f"{p['central_scale_factor_reference']:.7f}",
+        })
+    table = pd.DataFrame(rows)
+    st.dataframe(table, hide_index=True)
+    st.download_button("Download DSM parameter reference", table.to_csv(index=False),
+                       "dsm_parameter_reference.csv", "text/csv", key="dsm_reference_download")
+    st.caption("At each listed origin, E = 500,000 m and N = 500,000 m. These are mathematical reference points, not independently surveyed controls.")
+
 
 # ==========================================
 # 3. UI LAYOUT & TABS
@@ -343,7 +363,8 @@ with tabs[0]:
             st.error(validation_error)
         else:
             k_zone, k_epsg, desc = detect_kalianpur_zone(l1, ln1)
-            dsm_zone, dsm_epsg = detect_dsm_zone(l1, ln1)
+            dsm_candidates = dsm_zone_candidates(l1, ln1)
+            dsm_reference = ", ".join(dsm_candidates) if dsm_candidates else "No supplied zone has a nominal match"
             w_zone, w_epsg = detect_wgs84_zone(l1, ln1)
             k_reference = f"{k_zone} (EPSG:{k_epsg}) - {desc}" if k_zone else "Outside supported coverage"
             w_reference = f"{w_zone} (EPSG:{w_epsg})" if w_zone else "No regional projection found"
@@ -353,7 +374,7 @@ with tabs[0]:
                 <h4>🔍 Zone Detection (Point A)</h4>
                 <ul>
                     <li><b>Kalianpur:</b> {k_reference}</li>
-                    <li><b>DSM Zone:</b> {dsm_zone} (unverified legacy index; conversion unavailable)</li>
+                    <li><b>DSM Zone:</b> {dsm_reference} (WGS84/LCC; confirm map sheet zone)</li>
                     <li><b>WGS84 Regional Projection:</b> {w_reference}</li>
                 </ul>
             </div>
@@ -447,7 +468,12 @@ with tabs[3]:
 # --- TAB 5: LAT/LON TO GRID ---
 with tabs[4]:
     st.markdown('<div class="header-style">🔄 WGS84 Lat/Lon to Indian Grid</div>', unsafe_allow_html=True)
-    st.caption("EPSG:4326 → supported Kalianpur 1975 zone. Detection uses EPSG area bounds; confirm the map datum and zone.")
+    forward_system = st.selectbox("Target grid system", ["Kalianpur 1975", DSM_SYSTEM], key="forward_grid_system")
+    if forward_system == DSM_SYSTEM:
+        forward_dsm_zone = dsm_target_selector("forward_dsm_zone")
+        st.caption(DSM_NOTE)
+    else:
+        st.caption("EPSG:4326 → supported Kalianpur 1975 zone. Detection uses EPSG area bounds; confirm the map datum and zone.")
     
     c_l1, c_l2, c_l3 = st.columns(3)
     with c_l1: l_lat = st.text_input("Lat (Deg)", "30.3165")
@@ -464,17 +490,22 @@ with tabs[4]:
             if v_h is None:
                 v_h = 0.0
             
-            kz, ke, easting, northing = wgs84_to_kalianpur(v_lat, v_lon)
-            show_kalianpur_accuracy(kz)
+            if forward_system == DSM_SYSTEM:
+                zone, easting, northing = wgs84_to_dsm(v_lat, v_lon, forward_dsm_zone)
+                show_dsm_result(zone, easting, northing)
+                st.write(f"Height (unchanged): {v_h} m")
+            else:
+                kz, ke, easting, northing = wgs84_to_kalianpur(v_lat, v_lon)
+                show_kalianpur_accuracy(kz)
             
-            st.markdown(f"""
-            <div class="result-box">
-                <h4>🎯 Indian Grid Result ({kz})</h4>
-                <p><b>Easting:</b> {easting:,.3f} m</p>
-                <p><b>Northing:</b> {northing:,.3f} m</p>
-                <p><b>Height (unchanged):</b> {v_h} m</p>
-            </div>
-            """, unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="result-box">
+                    <h4>🎯 Indian Grid Result ({kz})</h4>
+                    <p><b>Easting:</b> {easting:,.3f} m</p>
+                    <p><b>Northing:</b> {northing:,.3f} m</p>
+                    <p><b>Height (unchanged):</b> {v_h} m</p>
+                </div>
+                """, unsafe_allow_html=True)
         except Exception as e:
             st.error(f"Conversion Error: {e}")
 
@@ -515,23 +546,50 @@ with tabs[5]:
         except Exception as e:
             st.error(f"Error: {e}")
 
-# DSM transformations remain unavailable until an authoritative definition
-# and independent control points establish the projection and datum operation.
-# Keeping the tabs makes the unavailable capability explicit to existing users.
+# --- DSM CONVERSIONS: SUPPLIED LCC PARAMETERS ON WGS84 ---
 with tabs[6]:
     st.markdown('<div class="header-style">🔄 ESM Grid to DSM Grid</div>', unsafe_allow_html=True)
-    st.warning(DSM_UNAVAILABLE_REASON)
-    st.button("Convert ESM -> DSM", disabled=True)
+    st.caption(DSM_NOTE)
+    esm_source_zone = st.selectbox("Source ESM zone", list(ENHANCED_KALIANPUR_ZONES), key="esm_dsm_source")
+    esm_target_zone = dsm_target_selector("esm_dsm_target")
+    esm_e = st.text_input("ESM Easting (m)", "3877983.50", key="esm_dsm_e")
+    esm_n = st.text_input("ESM Northing (m)", "756073.40", key="esm_dsm_n")
+    if st.button("Convert ESM -> DSM"):
+        try:
+            zone, e, n = kalianpur_to_dsm(esm_e, esm_n, esm_source_zone, esm_target_zone)
+            show_dsm_result(zone, e, n)
+            show_kalianpur_accuracy(esm_source_zone)
+        except Exception as exc:
+            st.error(f"Conversion Error: {exc}")
 
 with tabs[7]:
-    st.markdown('<div class="header-style">↩️ DSM Grid to Lat/Lon</div>', unsafe_allow_html=True)
-    st.warning(DSM_UNAVAILABLE_REASON)
-    st.button("Convert DSM -> Lat/Lon", disabled=True)
+    st.markdown('<div class="header-style">↩️ DSM Grid to WGS84 Lat/Lon</div>', unsafe_allow_html=True)
+    st.caption(DSM_NOTE)
+    st.caption("Enter full metre coordinates. Shortened grid references also require their grid-square identification.")
+    dsm_source_zone = st.selectbox("Source DSM zone", list(DSM_ZONES), index=7, key="dsm_latlon_source")
+    dsm_e = st.text_input("DSM Easting (m)", "500000", key="dsm_latlon_e")
+    dsm_n = st.text_input("DSM Northing (m)", "500000", key="dsm_latlon_n")
+    if st.button("Convert DSM -> Lat/Lon"):
+        try:
+            lon, lat = dsm_to_wgs84(dsm_e, dsm_n, dsm_source_zone)
+            st.success(f"DSM {dsm_source_zone} → WGS84 (EPSG:4326): {lat:.8f}°, {lon:.8f}°")
+            st.code(f"{decimal_to_dms(lat, 'lat')}, {decimal_to_dms(lon, 'lon')}", language="text")
+        except Exception as exc:
+            st.error(f"Conversion Error: {exc}")
 
 with tabs[8]:
     st.markdown('<div class="header-style">↩️ DSM Grid to ESM Grid</div>', unsafe_allow_html=True)
-    st.warning(DSM_UNAVAILABLE_REASON)
-    st.button("Convert DSM -> ESM", disabled=True)
+    st.caption(DSM_NOTE)
+    dsm_esm_zone = st.selectbox("Source DSM zone", list(DSM_ZONES), index=7, key="dsm_esm_source")
+    dsm_esm_e = st.text_input("DSM Easting (m)", "500000", key="dsm_esm_e")
+    dsm_esm_n = st.text_input("DSM Northing (m)", "500000", key="dsm_esm_n")
+    if st.button("Convert DSM -> ESM"):
+        try:
+            zone, epsg, e, n = dsm_to_kalianpur(dsm_esm_e, dsm_esm_n, dsm_esm_zone)
+            st.success(f"ESM Grid Result ({zone}, EPSG:{epsg}): E {e:.3f} m, N {n:.3f} m")
+            show_kalianpur_accuracy(zone)
+        except Exception as exc:
+            st.error(f"Conversion Error: {exc}")
 
 # --- TAB 10: TRAVERSE ---
 with tabs[9]:
@@ -582,74 +640,98 @@ with tabs[9]:
         except Exception as e:
             st.error(f"Calculation Error: {e}")
 
-# --- TAB 10: BATCH PROCESSING ---
+# --- TAB 11: BATCH PROCESSING ---
 with tabs[10]:
     st.markdown('<div class="header-style">📊 Batch Processing (CSV)</div>', unsafe_allow_html=True)
-    st.info("Columns required: `easting`, `northing`, `height`, `point_id` (optional)")
-    
-    # Template Download
-    template_data = "easting,northing,height,point_id\n3877983.50,756073.40,600.0,P1\n3878500.20,756500.10,650.0,P2"
-    st.download_button("📥 Download CSV Template", template_data, "template.csv", "text/csv")
-    
-    uploaded_file = st.file_uploader("Upload CSV", type=['csv'])
-    batch_zone = st.selectbox(
-        "Source Kalianpur Zone",
-        list(ENHANCED_KALIANPUR_ZONES.keys()),
-        key="batch_source_zone",
-    )
-    
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        st.dataframe(df.head())
-        
-        if st.button("Start Batch Processing (Grid -> Lat/Lon)"):
-            results = []
-            progress_bar = st.progress(0)
-            
-            try:
-                required_columns = {"easting", "northing"}
-                missing_columns = required_columns.difference(df.columns)
-                if missing_columns:
-                    raise ValueError(
-                        "Missing required column(s): " + ", ".join(sorted(missing_columns))
-                    )
-                if df.empty:
-                    raise ValueError("The uploaded CSV contains no data rows.")
+    batch_operation = st.selectbox("Batch conversion", [
+        "Kalianpur grid -> WGS84", "DSM grid -> WGS84", "WGS84 -> DSM grid",
+        "Kalianpur grid -> DSM grid", "DSM grid -> Kalianpur grid",
+    ], key="batch_operation")
+    batch_from_dsm = batch_operation.startswith("DSM grid")
+    batch_from_wgs = batch_operation.startswith("WGS84")
+    batch_to_dsm = batch_operation.endswith("-> DSM grid")
+    if batch_from_dsm:
+        batch_dsm_source = st.selectbox("Source DSM zone", list(DSM_ZONES), index=7, key="batch_dsm_source")
+        st.caption("All uploaded rows must use this source DSM zone and full metre coordinates.")
+    elif not batch_from_wgs:
+        batch_zone = st.selectbox("Source Kalianpur Zone", list(ENHANCED_KALIANPUR_ZONES), key="batch_source_zone")
+    if batch_to_dsm:
+        batch_dsm_target = dsm_target_selector("batch_dsm_target")
+    if "DSM" in batch_operation:
+        st.caption(DSM_NOTE)
 
-                show_kalianpur_accuracy(batch_zone)
-                
-                for i, row in df.iterrows():
-                    try:
-                        lon, lat = kalianpur_to_wgs84(
-                            row['easting'], row['northing'], batch_zone,
-                        )
-                        results.append({
-                            'point_id': row.get('point_id', f'P{i}'),
-                            'lat': lat,
-                            'lon': lon,
-                            'height': row.get('height', 0),
-                            'status': 'Success'
-                        })
-                    except Exception as e:
-                        results.append({'point_id': row.get('point_id', i), 'status': f'Error: {e}'})
-                    
-                    progress_bar.progress((i + 1) / len(df))
-                
-                res_df = pd.DataFrame(results)
-                st.success("Processing Complete!")
-                st.dataframe(res_df)
-                
-                csv_buffer = io.StringIO()
-                res_df.to_csv(csv_buffer, index=False)
-                st.download_button("💾 Export Results", csv_buffer.getvalue(), "results.csv", "text/csv")
-                
-            except Exception as e:
-                st.error(f"Batch Error: {e}")
+    if batch_from_wgs:
+        required_columns = {"lat", "lon"}
+        template_data = "lat,lon,height,point_id\n30.3165,78.0322,600.0,P1\n27.006955555556,80,0,P2"
+    else:
+        required_columns = {"easting", "northing"}
+        if batch_from_dsm:
+            template_data = "easting,northing,height,point_id\n500000,500000,0,P1\n501000,501000,0,P2"
+        else:
+            template_data = "easting,northing,height,point_id\n3877983.50,756073.40,600.0,P1\n3878500.20,756500.10,650.0,P2"
+    st.info("Required columns: " + ", ".join(sorted(required_columns)) + ". Optional: height, point_id. Heights are unchanged.")
+    st.download_button("📥 Download CSV Template", template_data, "template.csv", "text/csv")
+    uploaded_file = st.file_uploader("Upload CSV", type=['csv'])
+
+    if uploaded_file:
+        try:
+            df = pd.read_csv(uploaded_file)
+        except Exception as exc:
+            st.error(f"CSV Error: {exc}")
+            df = None
+        if df is not None:
+            st.dataframe(df.head())
+            batch_button = "Start Batch Processing (Grid -> Lat/Lon)" if batch_operation.endswith("WGS84") else "Start Batch Processing"
+            if st.button(batch_button):
+                results = []
+                progress_bar = st.progress(0)
+                try:
+                    missing = required_columns.difference(df.columns)
+                    if missing:
+                        raise ValueError("Missing required column(s): " + ", ".join(sorted(missing)))
+                    if df.empty:
+                        raise ValueError("The uploaded CSV contains no data rows.")
+                    if not batch_from_dsm and not batch_from_wgs:
+                        show_kalianpur_accuracy(batch_zone)
+                    for i, row in df.iterrows():
+                        result = {"point_id": row.get("point_id", f"P{i}"), "height": row.get("height", 0)}
+                        try:
+                            if batch_operation == "Kalianpur grid -> WGS84":
+                                lon, lat = kalianpur_to_wgs84(row["easting"], row["northing"], batch_zone)
+                                result.update(lat=lat, lon=lon, source_zone=batch_zone, target_crs="EPSG:4326")
+                            elif batch_operation == "DSM grid -> WGS84":
+                                lon, lat = dsm_to_wgs84(row["easting"], row["northing"], batch_dsm_source)
+                                result.update(lat=lat, lon=lon, source_zone=batch_dsm_source, target_crs="EPSG:4326")
+                            elif batch_operation == "WGS84 -> DSM grid":
+                                zone, e, n = wgs84_to_dsm(row["lat"], row["lon"], batch_dsm_target)
+                                result.update(easting=e, northing=n, target_zone=zone, target_crs="DSM / WGS84 LCC (supplied parameters)")
+                            elif batch_operation == "Kalianpur grid -> DSM grid":
+                                zone, e, n = kalianpur_to_dsm(row["easting"], row["northing"], batch_zone, batch_dsm_target)
+                                result.update(easting=e, northing=n, source_zone=batch_zone, target_zone=zone,
+                                              target_crs="DSM / WGS84 LCC (supplied parameters)",
+                                              datum_accuracy_m=kalianpur_transformer(batch_zone).accuracy)
+                            else:
+                                zone, epsg, e, n = dsm_to_kalianpur(row["easting"], row["northing"], batch_dsm_source)
+                                result.update(easting=e, northing=n, source_zone=batch_dsm_source, target_zone=zone,
+                                              target_crs=f"EPSG:{epsg}", datum_accuracy_m=kalianpur_transformer(zone).accuracy)
+                            result["status"] = "Success"
+                        except Exception as exc:
+                            result["status"] = f"Error: {exc}"
+                        results.append(result)
+                        progress_bar.progress((i + 1) / len(df))
+                    res_df = pd.DataFrame(results)
+                    success_count = sum(result["status"] == "Success" for result in results)
+                    st.success(f"Processing complete: {success_count} succeeded, {len(results) - success_count} failed.")
+                    st.dataframe(res_df)
+                    st.download_button("💾 Export Results", res_df.to_csv(index=False), "results.csv", "text/csv")
+                except Exception as exc:
+                    st.error(f"Batch Error: {exc}")
 
 # --- TAB 11: OWN POSITION FINDER ---
 with tabs[11]:
     st.markdown('<div class="header-style">📍 Own Position Finder</div>', unsafe_allow_html=True)
     st.write("Enable the checkbox below to retrieve your current coordinates.")
+    position_dsm_zone = dsm_target_selector("position_dsm_zone", "DSM zone for own position")
     st.caption("Note: Please allow location access. The system will scan for up to 15 seconds to achieve <1m accuracy.")
 
     if st.checkbox("Get Own Position", key="get_pos_checkbox"):
@@ -767,9 +849,18 @@ with tabs[11]:
         except Exception as exc:
             st.warning(f"Kalianpur conversion unavailable: {exc}")
 
-        # 3. DSM reference only: no coordinates from unverified parameters.
-        st.subheader("3. DSM Grid")
-        st.warning(DSM_UNAVAILABLE_REASON)
+        # 3. DSM WGS84/LCC grid, using the supplied parameter table.
+        st.subheader("3. DSM Grid (WGS84/LCC)")
+        try:
+            zone, e, n = wgs84_to_dsm(lat, lon, position_dsm_zone)
+            st.write(f"**DSM zone:** {zone}")
+            st.caption(DSM_NOTE)
+            c5, c6 = st.columns(2)
+            c5.metric("DSM Easting", f"{e:.3f}")
+            c6.metric("DSM Northing", f"{n:.3f}")
+            st.code(f"{zone}: E {e:.3f} m, N {n:.3f} m", language="text")
+        except Exception as exc:
+            st.warning(f"DSM conversion unavailable: {exc}")
 
         # 4. Google Maps Link
         st.markdown(f"""<a href="https://www.google.com/maps/search/?api=1&query={lat},{lon}" target="_blank"><button style="background-color:#4CAF50; color:white; padding:10px 20px; border:none; border-radius:5px; cursor:pointer;">Open in Google Maps 🗺️</button></a>""", unsafe_allow_html=True)
@@ -778,16 +869,14 @@ with tabs[11]:
 with tabs[12]:
     st.markdown('<div class="header-style">🗺️ Zone Reference</div>', unsafe_allow_html=True)
     
-    z_type = st.radio("Select System", ["Kalianpur 1975", "DSM (unverified)", "WGS84"])
+    z_type = st.radio("Select System", ["Kalianpur 1975", DSM_SYSTEM, "WGS84"])
     
     if z_type == "Kalianpur 1975":
         st.caption("Areas below are EPSG bounding boxes, not exact coverage polygons. Confirm the source map datum and zone.")
         for k, v in ENHANCED_KALIANPUR_ZONES.items():
             st.expander(f"{k} (EPSG:{v['epsg']})").write(f"Bounds: {v['bounds']}\n\nDesc: {v['description']}")
-    elif z_type == "DSM (unverified)":
-        st.warning(DSM_UNAVAILABLE_REASON)
-        for k, v in DSM_ZONES.items():
-            st.write(f"**Zone {k}**: Unverified legacy index | Extent: {v['extent']}")
+    elif z_type == DSM_SYSTEM:
+        show_dsm_reference()
     else:
         for k, v in WGS84_ZONES.items():
             st.write(f"**{k}**: EPSG {v['epsg']}")

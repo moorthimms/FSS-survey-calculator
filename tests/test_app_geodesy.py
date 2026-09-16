@@ -18,11 +18,10 @@ class AppGeodesyTests(unittest.TestCase):
         self.app = AppTest.from_file(APP).run(timeout=20)
         self.assertEqual(len(self.app.exception), 0)
 
-    def test_all_tabs_render_and_unverified_dsm_actions_are_disabled(self):
+    def test_all_tabs_render_and_supplied_dsm_actions_are_enabled(self):
         self.assertEqual(len(self.app.tabs), 14)
         for label in ["Convert ESM -> DSM", "Convert DSM -> Lat/Lon", "Convert DSM -> ESM"]:
-            self.assertTrue(labeled(self.app.button, label).disabled)
-        self.assertTrue(any("authoritative DSM definition" in x.value for x in self.app.warning))
+            self.assertFalse(labeled(self.app.button, label).disabled)
 
     def test_source_selectors_offer_only_supported_zones(self):
         expected = ["Zone I", "Zone IIa", "Zone IIb", "Zone IIIa", "Zone IVa"]
@@ -83,13 +82,13 @@ class AppGeodesyTests(unittest.TestCase):
         self.assertTrue(all(status.startswith("Error:") for status in results["status"].iloc[1:]))
 
     def test_own_position_outside_coverage_keeps_wgs84_without_grid_output(self):
-        location = {"coords": {"latitude": 7.9, "longitude": 77, "accuracy": 5}}
+        location = {"coords": {"latitude": 0, "longitude": 0, "accuracy": 5}}
         with patch("streamlit_js_eval.streamlit_js_eval", return_value=location):
             self.app.checkbox("get_pos_checkbox").check().run()
         self.assertEqual(len(self.app.exception), 0)
         self.assertEqual([x.label for x in self.app.metric], ["Latitude (DD)", "Longitude (DD)"])
         self.assertTrue(any("Outside supported" in x.value for x in self.app.warning))
-        self.assertTrue(any("DSM conversion is unavailable" in x.value for x in self.app.warning))
+        self.assertTrue(any("DSM conversion unavailable" in x.value for x in self.app.warning))
 
 
 if __name__ == "__main__":

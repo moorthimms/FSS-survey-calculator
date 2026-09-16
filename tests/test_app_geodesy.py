@@ -23,10 +23,36 @@ class AppGeodesyTests(unittest.TestCase):
         for label in ["Convert ESM -> DSM", "Convert DSM -> Lat/Lon", "Convert DSM -> ESM"]:
             self.assertFalse(labeled(self.app.button, label).disabled)
 
-    def test_source_selectors_offer_only_supported_zones(self):
-        expected = ["Zone I", "Zone IIa", "Zone IIb", "Zone IIIa", "Zone IVa"]
-        for key in ["grid_to_latlon_zone", "batch_source_zone"]:
+    def test_source_selectors_preserve_all_original_zones(self):
+        expected = ["Zone I", "Zone IIa", "Zone IIb", "Zone IIIa", "Zone IIIb",
+                    "Zone IVa", "Zone IVb", "Zone Va", "Zone Vb"]
+        for key in ["grid_to_latlon_zone", "batch_source_zone", "esm_dsm_source"]:
             self.assertEqual(self.app.selectbox(key).options, expected)
+
+    def test_original_kalianpur_identifier_is_visible_with_missing_definition(self):
+        self.app.selectbox("grid_to_latlon_zone").select("Zone IVb").run()
+        table = self.app.dataframe[-1].value.set_index("Zone")
+        self.assertEqual(len(table), 9)
+        self.assertEqual(table.loc["Zone IVb", "Original identifier"], "EPSG:24384")
+        self.assertEqual(table.loc["Zone IVb", "Status"], "Parameters required")
+        labeled(self.app.button, "Convert to Lat/Lon").click().run()
+        self.assertFalse(self.app.exception)
+        self.assertTrue(any("EPSG:24384" in x.value and "Parameters required" in x.value
+                            for x in self.app.error))
+        self.assertFalse(any("WGS84 Result" in x.value for x in self.app.markdown))
+
+    def test_batch_retains_unresolved_zone_in_each_row(self):
+        csv = "point_id,easting,northing\nP1,500000,500000\nP2,501000,501000\n"
+        with patch("streamlit.file_uploader", side_effect=lambda *a, **k: io.StringIO(csv)):
+            self.app.run()
+            self.app.selectbox("batch_source_zone").select("Zone IIIb")
+            labeled(self.app.button, "Start Batch Processing (Grid -> Lat/Lon)").click().run()
+        self.assertFalse(self.app.exception)
+        results = next(x.value for x in self.app.dataframe if "status" in x.value.columns)
+        self.assertEqual(results["source_zone"].tolist(), ["Zone IIIb", "Zone IIIb"])
+        self.assertTrue(all("EPSG:24382" in status and "Parameters required" in status
+                            for status in results["status"]))
+        self.assertNotIn("lat", results.columns)
 
     def test_outside_and_nearby_unsupported_coordinates_do_not_produce_grid(self):
         for lat, lon in [(0, 0), (7.9, 77), (10, 80.6), (18, 87.3)]:
@@ -76,7 +102,7 @@ class AppGeodesyTests(unittest.TestCase):
             self.app.selectbox("batch_source_zone").select("Zone IVa")
             labeled(self.app.button, "Start Batch Processing (Grid -> Lat/Lon)").click().run()
         self.assertEqual(len(self.app.exception), 0)
-        results = self.app.dataframe[-1].value
+        results = next(x.value for x in self.app.dataframe if "status" in x.value.columns)
         self.assertEqual(results.iloc[0]["status"], "Success")
         self.assertAlmostEqual(results.iloc[0]["lat"], 10, delta=1e-7)
         self.assertTrue(all(status.startswith("Error:") for status in results["status"].iloc[1:]))

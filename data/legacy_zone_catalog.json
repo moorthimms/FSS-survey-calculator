@@ -1,0 +1,369 @@
+{
+  "source_repository": "moorthimms/FSS-survey-calculator",
+  "source_commit": "85600eb6a7f0f912b9391a8ce1223e1cbe6b3850",
+  "source_file": "app.py",
+  "purpose": "Preserve every original zone identifier and metadata entry. These historical EPSG assignments and bounds are reference data, not validated conversion definitions.",
+  "zones": {
+    "Kalianpur 1975": {
+      "Zone I": {
+        "epsg": 24378,
+        "bounds": {
+          "lat_min": 28.0,
+          "lat_max": 35.51,
+          "lon_min": 70.35,
+          "lon_max": 81.64
+        },
+        "description": "Northern India (J&K, HP, Punjab, Haryana, Uttarakhand, North UP)",
+        "central_meridian": 78.0
+      },
+      "Zone IIa": {
+        "epsg": 24379,
+        "bounds": {
+          "lat_min": 21.0,
+          "lat_max": 28.01,
+          "lon_min": 68.13,
+          "lon_max": 82.01
+        },
+        "description": "Northwest India (Rajasthan, Gujarat, West MP, South UP)",
+        "central_meridian": 75.0
+      },
+      "Zone IIb": {
+        "epsg": 24380,
+        "bounds": {
+          "lat_min": 21.0,
+          "lat_max": 29.47,
+          "lon_min": 82.0,
+          "lon_max": 97.42
+        },
+        "description": "Northeast India (Assam, Meghalaya, Manipur, Mizoram)",
+        "central_meridian": 90.0
+      },
+      "Zone IIIa": {
+        "epsg": 24381,
+        "bounds": {
+          "lat_min": 15.0,
+          "lat_max": 21.01,
+          "lon_min": 70.14,
+          "lon_max": 87.15
+        },
+        "description": "Central India (Maharashtra, East MP, Chhattisgarh)",
+        "central_meridian": 78.0
+      },
+      "Zone IIIb": {
+        "epsg": 24382,
+        "bounds": {
+          "lat_min": 15.0,
+          "lat_max": 21.01,
+          "lon_min": 87.15,
+          "lon_max": 97.42
+        },
+        "description": "East Central India (Jharkhand, Odisha, East Bengal)",
+        "central_meridian": 92.0
+      },
+      "Zone IVa": {
+        "epsg": 24383,
+        "bounds": {
+          "lat_min": 8.02,
+          "lat_max": 15.01,
+          "lon_min": 73.94,
+          "lon_max": 80.4
+        },
+        "description": "Southwest India (Karnataka, Kerala, Tamil Nadu West)",
+        "central_meridian": 77.0
+      },
+      "Zone IVb": {
+        "epsg": 24384,
+        "bounds": {
+          "lat_min": 8.02,
+          "lat_max": 15.01,
+          "lon_min": 80.4,
+          "lon_max": 87.18
+        },
+        "description": "Southeast India (Andhra Pradesh, Tamil Nadu East)",
+        "central_meridian": 84.0
+      },
+      "Zone Va": {
+        "epsg": 24385,
+        "bounds": {
+          "lat_min": 5.0,
+          "lat_max": 8.02,
+          "lon_min": 73.94,
+          "lon_max": 80.4
+        },
+        "description": "Far South India (South Kerala, South Tamil Nadu)",
+        "central_meridian": 77.0
+      },
+      "Zone Vb": {
+        "epsg": 24386,
+        "bounds": {
+          "lat_min": 5.0,
+          "lat_max": 8.02,
+          "lon_min": 80.4,
+          "lon_max": 87.18
+        },
+        "description": "Far Southeast India (South Tamil Nadu, South Andhra)",
+        "central_meridian": 84.0
+      }
+    },
+    "DSM": {
+      "5C": {
+        "epsg": 2001,
+        "extent": [
+          68.0,
+          36.0,
+          76.0,
+          42.0
+        ]
+      },
+      "5D": {
+        "epsg": 2007,
+        "extent": [
+          68.0,
+          30.0,
+          76.0,
+          36.0
+        ]
+      },
+      "5E": {
+        "epsg": 2013,
+        "extent": [
+          68.0,
+          24.0,
+          76.0,
+          30.0
+        ]
+      },
+      "5F": {
+        "epsg": 2019,
+        "extent": [
+          68.0,
+          18.0,
+          76.0,
+          24.0
+        ]
+      },
+      "5G": {
+        "epsg": 2025,
+        "extent": [
+          68.0,
+          12.0,
+          76.0,
+          18.0
+        ]
+      },
+      "5H": {
+        "epsg": 2031,
+        "extent": [
+          68.0,
+          6.0,
+          76.0,
+          12.0
+        ]
+      },
+      "6C": {
+        "epsg": 2002,
+        "extent": [
+          76.0,
+          36.0,
+          84.0,
+          42.0
+        ]
+      },
+      "6D": {
+        "epsg": 2008,
+        "extent": [
+          76.0,
+          30.0,
+          84.0,
+          36.0
+        ]
+      },
+      "6E": {
+        "epsg": 2014,
+        "extent": [
+          76.0,
+          24.0,
+          84.0,
+          30.0
+        ]
+      },
+      "6F": {
+        "epsg": 2020,
+        "extent": [
+          76.0,
+          18.0,
+          84.0,
+          24.0
+        ]
+      },
+      "6G": {
+        "epsg": 2026,
+        "extent": [
+          76.0,
+          12.0,
+          84.0,
+          18.0
+        ]
+      },
+      "6H": {
+        "epsg": 2032,
+        "extent": [
+          76.0,
+          6.0,
+          84.0,
+          12.0
+        ]
+      },
+      "7C": {
+        "epsg": 2003,
+        "extent": [
+          84.0,
+          36.0,
+          92.0,
+          42.0
+        ]
+      },
+      "7D": {
+        "epsg": 2009,
+        "extent": [
+          84.0,
+          30.0,
+          92.0,
+          36.0
+        ]
+      },
+      "7E": {
+        "epsg": 2015,
+        "extent": [
+          84.0,
+          24.0,
+          92.0,
+          30.0
+        ]
+      },
+      "7F": {
+        "epsg": 2021,
+        "extent": [
+          84.0,
+          18.0,
+          92.0,
+          24.0
+        ]
+      },
+      "7G": {
+        "epsg": 2027,
+        "extent": [
+          84.0,
+          12.0,
+          92.0,
+          18.0
+        ]
+      },
+      "7H": {
+        "epsg": 2033,
+        "extent": [
+          84.0,
+          6.0,
+          92.0,
+          12.0
+        ]
+      },
+      "8C": {
+        "epsg": 2004,
+        "extent": [
+          92.0,
+          36.0,
+          100.0,
+          42.0
+        ]
+      },
+      "8D": {
+        "epsg": 2010,
+        "extent": [
+          92.0,
+          30.0,
+          100.0,
+          36.0
+        ]
+      },
+      "8E": {
+        "epsg": 2016,
+        "extent": [
+          92.0,
+          24.0,
+          100.0,
+          30.0
+        ]
+      },
+      "8F": {
+        "epsg": 2022,
+        "extent": [
+          92.0,
+          18.0,
+          100.0,
+          24.0
+        ]
+      },
+      "8G": {
+        "epsg": 2028,
+        "extent": [
+          92.0,
+          12.0,
+          100.0,
+          18.0
+        ]
+      },
+      "8H": {
+        "epsg": 2034,
+        "extent": [
+          92.0,
+          6.0,
+          100.0,
+          12.0
+        ]
+      }
+    }
+  },
+  "original_custom_dsm_parameters": {
+    "5": {
+      "central_meridian": 72,
+      "latitude_of_origin": 4,
+      "false_easting": 500000,
+      "false_northing": -2010760,
+      "scale_factor": 0.9999,
+      "semi_major": 6377276.345,
+      "semi_minor": 6356075.413,
+      "projection": "tmerc"
+    },
+    "6": {
+      "central_meridian": 80,
+      "latitude_of_origin": 4,
+      "false_easting": 500010,
+      "false_northing": -2010750,
+      "scale_factor": 0.9999,
+      "semi_major": 6377276.345,
+      "semi_minor": 6356075.413,
+      "projection": "tmerc"
+    },
+    "7": {
+      "central_meridian": 88,
+      "latitude_of_origin": 4,
+      "false_easting": 500000,
+      "false_northing": -2010760,
+      "scale_factor": 0.9999,
+      "semi_major": 6377276.345,
+      "semi_minor": 6356075.413,
+      "projection": "tmerc"
+    },
+    "8": {
+      "central_meridian": 96,
+      "latitude_of_origin": 4,
+      "false_easting": 500000,
+      "false_northing": -2010760,
+      "scale_factor": 0.9999,
+      "semi_major": 6377276.345,
+      "semi_minor": 6356075.413,
+      "projection": "tmerc"
+    }
+  }
+}

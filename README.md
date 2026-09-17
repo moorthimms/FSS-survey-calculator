@@ -8,7 +8,7 @@ A Streamlit web application for surveying and geodetic calculations, including:
 - WGS84, supported Kalianpur 1975 (ESM), and DSM WGS84/LCC coordinate conversion
 - automatic zone detection
 - CSV batch conversion, including DSM and ESM conversions in both directions
-- browser-based position display
+- browser-based position display and optional local RTK receiver/NTRIP input
 
 All 14 application tabs are retained. The zone catalog and selectors preserve all **9 original Kalianpur entries and 24 original DSM entries**, including their original identifiers. Calculation definitions are tracked separately so a historical identifier cannot silently select an unrelated grid.
 
@@ -22,6 +22,58 @@ streamlit run app.py
 ```
 
 For browser location, serve the application through HTTPS (or use localhost) and grant location permission. Browser/device location is informational and is not a substitute for survey-grade GNSS equipment.
+
+## Own Position and RTK
+
+Own Position offers two sources:
+
+| Source | What it provides | Where it runs |
+| --- | --- | --- |
+| Phone / browser | A fresh location snapshot and browser-reported accuracy; a 15-second scan requests high accuracy without promising a distance threshold | Hosted app over HTTPS, or localhost |
+| External RTK receiver | Live NMEA position, FIX/FLOAT state, satellite count, HDOP, correction age, same-epoch GST uncertainty, optional NTRIP forwarding and point logging | App running on the computer physically connected to the receiver's USB or Bluetooth serial port |
+
+**The hosted Streamlit server cannot read a Bluetooth receiver attached to a visitor's phone or computer.** This integration uses a local USB/serial or Bluetooth Classic COM connection, not a browser Bluetooth API. Direct Android/iPhone BLE or proprietary receiver integration requires the actual receiver model and protocol; it is not implemented by this change. Browser location never gets relabelled RTK from a small accuracy number.
+
+### Local receiver setup (Windows)
+
+1. Pair the rover by USB or Bluetooth and find its serial port in Device Manager, for example `COM5`. Configure its port to output checksummed NMEA **GGA and GST at 1 Hz or faster**. For app-supplied corrections, the same port must also accept **RTCM3** input. Receiver-specific port/output configuration is performed with the receiver's setup utility.
+2. In Command Prompt, from the repository directory:
+
+   ```bat
+   py -m venv .venv
+   .venv\Scripts\python -m pip install -r requirements.txt
+   set FSS_ENABLE_LOCAL_GNSS=1
+   .venv\Scripts\python -m streamlit run app.py --server.address 127.0.0.1
+   ```
+
+   For PowerShell use `$env:FSS_ENABLE_LOCAL_GNSS="1"` instead of `set`. On Linux/macOS, activate the virtual environment and run `FSS_ENABLE_LOCAL_GNSS=1 python -m streamlit run app.py --server.address 127.0.0.1`.
+
+3. Open **Own Position → External RTK receiver**, enter the serial port and baud rate, and connect. Keep this opt-in local installation bound to localhost; do not enable local receiver access on a shared/public app server.
+4. If the rover already gets corrections from its radio/modem/receiver app, leave app NTRIP forwarding off. Otherwise enter your caster host, port, mountpoint and credentials. TLS is enabled by default; use the transport and port specified by your provider. Plain HTTP does not encrypt credentials. This client supports **NTRIP v2 HTTP/HTTPS with RTCM3**, including chunked responses. Legacy `ICY`-only NTRIP v1 casters and RTCM2 are not supported.
+5. The app waits for a fresh rover GGA, supplies it in the initial caster request and sends updated rover GGA approximately every 10 seconds while corrections flow. It verifies RTCM3 frame CRCs and forwards the bytes to the rover. The **receiver**, not the app or phone, performs ambiguity resolution and computes the RTK solution. A stream error stops forwarding and requests reconnection; it does not manufacture a FIX.
+
+Credentials are used in the local session and are not written to project files or point exports. Disconnect closes the receiver and correction connection. An abandoned session releases the receiver after approximately 30 seconds without an app heartbeat. The receiver screen refreshes every second while the session is active. Keep the computer clock synchronized to UTC for freshness checks.
+
+### Status and logging limits
+
+The display reports the receiver's GGA quality code, including FIX (4), FLOAT (5), standalone and no fix. Some vendors assign additional services to these codes, so the label is explicitly **receiver reported**. A FIX flag alone is not a guarantee of centimetre field accuracy.
+
+HDOP is dimensionless; it is never converted into an invented metre accuracy. Horizontal uncertainty is the root-sum-square of the **latitude and longitude 1σ standard deviations in GST**. It is paired only with GGA from the same epoch. This statistic is not a 95% confidence radius, CEP, or an independently surveyed error measurement, and should not be equated with browser-reported accuracy.
+
+Point logging requires all of the following:
+
+- Current, connected RTK FIX; receiver epoch and reception no more than 5 seconds old.
+- Reported correction age within the selected limit (default 10 seconds). If the app supplies NTRIP, its correction frames must also be recent.
+- Same-epoch GST horizontal uncertainty within the selected limit (default 0.020 m). Missing GST or correction-age data is displayed as unreported and cannot pass the logging checks.
+- User confirmation that the receiver output datum/realization is compatible with WGS84 for the survey. NMEA GGA does not identify the datum realization or reference epoch; configure and verify these with the receiver/CORS provider.
+
+The quality is checked again when **Log RTK point** is clicked. FIX loss, stale data or deteriorating uncertainty prevents acceptance. CSV exports retain coordinates, measurement/record timestamps, fix quality, uncertainty, correction age, reference station and the chosen acceptance limits. Up to 10,000 points are held in the browser session's server state; download them before closing the app. No silent averaging of moving receiver positions is performed.
+
+Heights refer to the antenna: GGA MSL height and geoid separation are shown separately; their sum is labelled ellipsoidal height. No pole-height correction, tilt compensation or vertical-datum transformation is applied. WGS84/DSM conversion uses the existing supplied definitions. **An RTK receiver does not improve the existing approximately 22 m Kalianpur datum-transformation limitation.** All original identifiers and zone entries remain preserved.
+
+Protocol references: [Trimble GGA fields](https://receiverhelp.trimble.com/alloy-gnss/en-us/NMEA-0183messages_GGA.html), [Trimble GST fields](https://receiverhelp.trimble.com/alloy-gnss/en-us/NMEA-0183messages_GST.html), [BKG NTRIP description](https://igs.bkg.bund.de/ntrip/about), and [pySerial interface](https://pyserial.readthedocs.io/en/latest/pyserial_api.html).
+
+The serial/NTRIP integration is tested with a simulated receiver using real pySerial over an OS pseudo-terminal and a local HTTP caster. This verifies software transport and state handling, **not receiver compatibility or centimetre field accuracy**. Commissioning still requires the actual receiver, a compatible correction service and an independently surveyed control point.
 
 ## Input notes
 
@@ -120,3 +172,5 @@ python -m unittest discover -s tests -v
 ```
 
 The tests cover preservation of all 33 original zone identifiers, complete selectors and reference views, separation of historical identifiers from conversion definitions, all five verified Kalianpur zones, the 18 DSM image rows, origin and scale checks, an independent LCC formula, forward/inverse and ESM/DSM chains, missing definitions and non-finite values, Streamlit screens, batch exports, and DSM position output. Numerical fixtures and mathematical origin checks are not independently surveyed control points.
+
+Receiver checks also cover GGA/GST checksums and epochs, FIX loss, uncertainty and correction-age limits, NTRIP authentication failures, chunked RTCM forwarding, outbound GGA, disconnected hardware and resource cleanup. Pseudo-terminal integration tests run on POSIX; they are skipped on Windows. Browser watch/timer cleanup and scan selection can additionally be checked with `node tests/test_browser_scan.js` (Node is a test-only tool, not an application dependency).

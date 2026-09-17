@@ -225,7 +225,58 @@
         z = p[0] < 9 ? 31 : p[0] < 21 ? 33 : p[0] < 33 ? 35 : 37;
       return z;
     }
+    function zoneCandidates(p, system, config) {
+      coord(p);
+      if (system === "Kalianpur")
+        return Object.entries(config?.kalianpur || {})
+          .filter(
+            ([, v]) =>
+              p[0] >= v.bounds.lon_min &&
+              p[0] <= v.bounds.lon_max &&
+              p[1] >= v.bounds.lat_min &&
+              p[1] <= v.bounds.lat_max,
+          )
+          .map(([z]) => z);
+      return Object.entries(config?.dsm || {})
+        .filter(([, v]) => {
+          const latitude = Math.round(v.latitude_of_origin);
+          return (
+            Math.abs(p[0] - v.longitude_of_origin) <= 4 + 1e-9 &&
+            Math.abs(p[1] - latitude) <= 3 + 1e-9
+          );
+        })
+        .map(([z]) => z);
+    }
+    function autoReferences(p, system, config) {
+      const zones = zoneCandidates(p, system, config);
+      if (!zones.length)
+        return `${system}: outside supplied / verified zone coverage`;
+      return (
+        zones.map((z) => formatCoord(p, `${system} ${z}`, config)).join(" | ") +
+        (zones.length > 1
+          ? " · overlapping candidates; confirm map sheet"
+          : " · suggested zone")
+      );
+    }
     function projection(format, p, config) {
+      if (format === "DSM Auto" || format === "Kalianpur Auto") {
+        const system = format.split(" ")[0],
+          zones = zoneCandidates(p, system, config);
+        if (zones.length !== 1)
+          throw Error(
+            `${system}: ${zones.length ? "choose zone: " + zones.join(", ") : "outside supported coverage"}`,
+          );
+        return projection(`${system} ${zones[0]}`, p, config);
+      }
+      if (format.startsWith("Kalianpur ")) {
+        const zone = format.slice(10),
+          v = config?.kalianpur?.[zone];
+        if (!v)
+          throw Error(
+            `${format}: source parameters required; original identifier retained in Zone List.`,
+          );
+        return { name: `${format} · EPSG:${v.epsg}`, def: v.def };
+      }
       if (format === "UTM" || format === "MGRS") {
         if (p[1] < -80 || p[1] > 84)
           throw Error("UTM/MGRS display supports 80°S to 84°N.");
@@ -255,12 +306,37 @@
       const pr = projection(format, p, config);
       if (format === "MGRS") return mgrs.forward(p, 5);
       if (!pr) throw Error("Unknown coordinate format.");
-      const q = proj4("EPSG:4326", pr.def, p);
+      const q = proj4("EPSG:4326", pr.def, p.slice(0, 2));
       if (!q.slice(0, 2).every(finite))
         throw Error("Projection unavailable here.");
       return `${pr.name} · E ${q[0].toFixed(3)} · N ${q[1].toFixed(3)} m`;
     }
+    function inverseCandidates(text, system, config) {
+      const zones = Object.keys(
+        system === "DSM" ? config.dsm || {} : config.kalianpur || {},
+      );
+      const values = text
+        .trim()
+        .split(/[ ,;]+/)
+        .map(Number);
+      if (values.length !== 2 || !values.every(finite))
+        throw Error("Enter two finite metre coordinates.");
+      return zones.flatMap((zone) => {
+        try {
+          const p = parsePosition(text, `${system} ${zone}`, config);
+          return zoneCandidates(p, system, config).includes(zone)
+            ? [{ zone, p }]
+            : [];
+        } catch {
+          return [];
+        }
+      });
+    }
     function parsePosition(text, format, config, zone = 43, south = false) {
+      if (format.endsWith(" Auto"))
+        throw Error(
+          "Grid numbers alone need a source zone; select the map sheet zone.",
+        );
       if (format === "MGRS") return coord(mgrs.toPoint(text.trim()));
       const v = text
         .trim()
@@ -275,8 +351,25 @@
               def: `+proj=utm +zone=${zone} ${south ? "+south " : ""}+datum=WGS84 +units=m`,
             }
           : projection(format, [78, 30], config);
-      if (!pr) throw Error("Use DD, UTM, MGRS or DSM for coordinate entry.");
-      return coord(proj4(pr.def, "EPSG:4326", v));
+      if (!pr)
+        throw Error(
+          "Use DD, UTM, MGRS, DSM or Kalianpur for coordinate entry.",
+        );
+      const p = coord(proj4(pr.def, "EPSG:4326", v));
+      if (format.startsWith("Kalianpur ")) {
+        const b = config.kalianpur[format.slice(10)].bounds,
+          tolerance = 1e-7;
+        if (
+          p[0] < b.lon_min - tolerance ||
+          p[0] > b.lon_max + tolerance ||
+          p[1] < b.lat_min - tolerance ||
+          p[1] > b.lat_max + tolerance
+        )
+          throw Error(
+            "Coordinates fall outside the selected Kalianpur zone; confirm the map sheet.",
+          );
+      }
+      return p;
     }
     function grid(center, bounds, format, config) {
       const out = [];
@@ -650,8 +743,11 @@
       feature,
       dms,
       utmZone,
+      zoneCandidates,
+      autoReferences,
       projection,
       formatCoord,
+      inverseCandidates,
       parsePosition,
       grid,
       profile,

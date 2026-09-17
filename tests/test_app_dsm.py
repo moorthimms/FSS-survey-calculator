@@ -142,7 +142,7 @@ class AppDsmTests(unittest.TestCase):
         expected = [f"{column}{band}" for column in "5678" for band in "CDEFGH"]
         for key, page in [("dsm_latlon_source", "DSM to Lat/Lon"), ("dsm_esm_source", "DSM to ESM")]:
             self.app.radio("app_menu").set_value(page).run()
-            self.assertEqual(self.app.selectbox(key).options, expected)
+            self.assertEqual(self.app.selectbox(key).options, expected + ["Auto (source candidates)"])
         for key, page in [("esm_dsm_target", "ESM to DSM"), ("position_dsm_zone", "Own Position")]:
             self.app.radio("app_menu").set_value(page).run()
             self.assertEqual(self.app.selectbox(key).options[1:], expected)
@@ -151,7 +151,7 @@ class AppDsmTests(unittest.TestCase):
         self.assertEqual(self.app.selectbox("forward_dsm_zone").options[1:], expected)
         self.app.radio("app_menu").set_value("Batch Process").run()
         self.app.selectbox("batch_operation").select("DSM grid -> WGS84").run()
-        self.assertEqual(self.app.selectbox("batch_dsm_source").options, expected)
+        self.assertEqual(self.app.selectbox("batch_dsm_source").options, expected + ["Auto (source candidates)"])
 
     def test_original_dsm_identifier_is_retained_without_using_foreign_crs(self):
         self.app.radio("app_menu").set_value("DSM to Lat/Lon").run()
@@ -165,3 +165,23 @@ class AppDsmTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class AutoSourceAppTests(unittest.TestCase):
+    def test_single_and_batch_auto_report_ambiguous_candidates(self):
+        app = AppTest.from_file(APP).run(timeout=20)
+        app.radio('app_menu').set_value('DSM to Lat/Lon').run()
+        app.selectbox('dsm_latlon_source').select('Auto (source candidates)').run()
+        candidates = next(x.value for x in app.dataframe if 'zone' in x.value.columns)
+        self.assertEqual(len(candidates), 18)
+        labeled(app.button, 'Convert DSM -> Lat/Lon').click().run()
+        self.assertTrue(any('Ambiguous source zone' in x.value for x in app.error))
+        self.assertFalse(app.success)
+        app.radio('app_menu').set_value('Batch Process').run()
+        csv = 'easting,northing\n500000,500000\n'
+        with patch('streamlit.file_uploader', side_effect=lambda *a, **k: io.StringIO(csv)):
+            app.selectbox('batch_operation').select('DSM grid -> WGS84').run()
+            app.selectbox('batch_dsm_source').select('Auto (source candidates)')
+            labeled(app.button, 'Start Batch Processing (Grid -> Lat/Lon)').click().run()
+        result = next(x.value for x in app.dataframe if 'status' in x.value.columns)
+        self.assertIn('Ambiguous source zone', result.iloc[0]['status'])
+        self.assertNotIn('lat', result.columns)

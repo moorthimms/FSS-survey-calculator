@@ -444,3 +444,115 @@ select:focus-visible {
   border-radius: 3px;
   pointer-events: none;
 }
+
+/* Compact GIS workspace: tool strip, docked panel, live status and corner controls. */
+header {
+  height: 56px;
+  padding: 8px 16px;
+}
+header small {
+  display: none;
+}
+#map-toolbar {
+  display: flex;
+  gap: 5px;
+  padding: 6px 10px;
+  background: #edf2f3;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+#map-toolbar button {
+  flex-shrink: 0;
+  min-height: 36px;
+  border-radius: 4px;
+}
+#map-toolbar button[aria-pressed="true"] {
+  background: #d3e9e6;
+  border-color: var(--accent);
+}
+main {
+  height: 790px;
+}
+aside {
+  padding: 12px 15px;
+  width: 285px;
+}
+h2 {
+  font-size: 18px;
+  margin-top: 15px;
+}
+#map-corner {
+  position: absolute;
+  right: 10px;
+  top: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+  gap: 6px;
+  width: 170px;
+  pointer-events: none;
+}
+#map-corner button {
+  background: #fffffff5;
+  box-shadow: 0 1px 6px #1233;
+  pointer-events: auto;
+  min-height: 42px;
+}
+#own-summary {
+  max-width: 170px;
+  padding: 6px;
+  background: #fffffff0;
+  border-radius: 4px;
+  font-size: 11px;
+  text-align: right;
+  white-space: pre-line;
+}
+#coordinates {
+  top: auto;
+  bottom: 62px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+  max-height: 180px;
+  overflow: auto;
+  pointer-events: auto;
+  font-size: 11px;
+  padding: 7px 10px;
+}
+#coordinate-context {
+  margin: 0;
+  font-weight: 700;
+  color: #126e72;
+}
+#coord-wgs {
+  color: #244d70;
+}
+#coord-kalianpur {
+  color: #7b542c;
+}
+#map-badge {
+  top: 10px;
+  bottom: auto;
+  max-width: calc(100% - 70px);
+}
+#profile-panel {
+  bottom: 250px;
+}
+@media (max-width: 760px) {
+  #map-toolbar button {
+    min-height: 42px;
+  }
+  #coordinates {
+    bottom: 100px;
+    font-size: 10px;
+    max-height: 165px;
+  }
+  #map-corner {
+    top: 155px;
+  }
+  #own-summary {
+    max-width: 140px;
+  }
+  #profile-panel {
+    bottom: 280px;
+  }
+}

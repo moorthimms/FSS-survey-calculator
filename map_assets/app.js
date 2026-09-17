@@ -60,12 +60,19 @@
   const onlineElevation = new Map();
   let gridMarkers = [];
   let lastNavTime = null;
+  let cursorPoint = null,
+    elevationTimer = null,
+    elevationController = null;
+  let elevationPath = null,
+    elevationFailed = new Map();
+  let lastGpsTime = null;
   let gpsTimer = null,
     ownMarker = null,
     saveTimer,
     saveQueue = Promise.resolve(),
     audioContext = null;
   const settingsIds = [
+    "cursor-elevation",
     "primary-format",
     "secondary-format",
     "show-coordinates",
@@ -387,7 +394,7 @@
       }
       return null;
     }
-    if (val("terrain-source") === "online") {
+    if (val("terrain-source") === "online" || checked("cursor-elevation")) {
       // Read the source DEM, never the exaggerated display mesh (which also
       // returns zero for some missing-tile cases in MapLibre).
       for (let z = Math.min(15, Math.floor(map.getZoom())); z >= 0; z--) {
@@ -399,7 +406,28 @@
     return null;
   }
   function updateCenter() {
-    const p = centerPoint();
+    const p = cursorPoint || centerPoint();
+    set(
+      "coordinate-context",
+      cursorPoint
+        ? "Cursor · suggested grid zones"
+        : "Map center · suggested grid zones",
+    );
+    try {
+      set("coord-wgs", "WGS84 · MGRS " + C.formatCoord(p, "MGRS"));
+    } catch (e) {
+      set("coord-wgs", e.message);
+    }
+    for (const [id, system] of [
+      ["coord-dsm", "DSM"],
+      ["coord-kalianpur", "Kalianpur"],
+    ]) {
+      try {
+        set(id, C.autoReferences(p, system, config));
+      } catch (e) {
+        set(id, `${system}: ${e.message}`);
+      }
+    }
     $("coordinates").hidden = !checked("show-coordinates");
     for (const [id, fmt] of [
       ["coord-primary", "primary-format"],
@@ -411,19 +439,13 @@
         set(id, e.message);
       }
     }
-    const h = groundHeight(p);
-    set(
-      "center-height",
-      h === null
-        ? "Ground elevation unavailable"
-        : `Ground elevation: ${h.toFixed(1)} m · ${val("terrain-source") === "hgt" ? "HGT source datum" : "terrain source datum"}`,
-    );
-    set("terrain-readout", $("center-height").textContent);
+    updateHeight();
     if (
       draft.length &&
       val("draw-mode") !== "Point" &&
       val("draw-mode") !== "browse"
     ) {
+      const p = centerPoint();
       const leg = C.inverse(draft.at(-1), p);
       setGeo("preview", [C.feature("LineString", [draft.at(-1), p])]);
       set(
@@ -431,6 +453,56 @@
         `${draft.length} fixed vertices\nPreview leg: ${distance(leg.distance)} · ${leg.bearing.toFixed(2)}° true\n${stats(drawFeature([...draft, p]))}`,
       );
     } else setGeo("preview", []);
+  }
+  function updateHeight() {
+    const p = cursorPoint || centerPoint();
+    const h = groundHeight(p);
+    scheduleCursorElevation(p, h);
+    set(
+      "center-height",
+      h === null
+        ? "Ground elevation unavailable"
+        : `Ground elevation: ${h.toFixed(1)} m · ${val("terrain-source") === "hgt" ? "HGT source datum" : "terrain source datum"}`,
+    );
+    set("terrain-readout", $("center-height").textContent);
+  }
+  function scheduleCursorElevation(p, height) {
+    clearTimeout(elevationTimer);
+    if (
+      height !== null ||
+      !checked("cursor-elevation") ||
+      val("terrain-source") === "hgt" ||
+      Math.abs(p[1]) > 85
+    ) {
+      elevationController?.abort();
+      elevationPath = null;
+      return;
+    }
+    const z = Math.min(12, Math.max(0, Math.floor(map.getZoom()))),
+      [x, y] = C.tileXY(p, z),
+      path = `${z}/${x}/${y}`;
+    if (
+      elevationPath === path ||
+      Date.now() - (elevationFailed.get(path) || 0) < 30000
+    )
+      return;
+    elevationTimer = setTimeout(async () => {
+      elevationController?.abort();
+      const controller = new AbortController();
+      elevationController = controller;
+      elevationPath = path;
+      try {
+        await loadOnlineElevation(path, controller);
+        if (!controller.signal.aborted && $("coordinates")) updateCenter();
+      } catch (e) {
+        if (!controller.signal.aborted) {
+          if (elevationFailed.size > 32) elevationFailed.clear();
+          elevationFailed.set(path, Date.now());
+        }
+      } finally {
+        if (elevationController === controller) elevationPath = null;
+      }
+    }, 250);
   }
   function updateGrid() {
     gridMarkers.forEach((m) => m.remove());
@@ -615,6 +687,7 @@
         "gps-readout",
         "GPS fix unavailable or stale. Waiting for a fresh reading.",
       );
+      set("own-summary", "GPS off / stale · height unavailable");
       ownMarker?.remove();
       ownMarker = null;
       setGeo("accuracy", []);
@@ -628,6 +701,10 @@
       return;
     }
     const h = own.p[2];
+    set(
+      "own-summary",
+      `GPS ±${own.accuracy.toFixed(1)} m · ${Math.max(0, Math.floor((Date.now() - own.time) / 1000))}s old\nHeight: ${C.finite(h) ? h.toFixed(1) + " m (ellipsoid)" : "unavailable"}\nVertical ±${own.verticalAccuracy === null ? "unreported" : own.verticalAccuracy.toFixed(1) + " m"}`,
+    );
     set(
       "gps-readout",
       `${C.formatCoord(own.p, "DD")}\nHorizontal accuracy: ${own.accuracy.toFixed(1)} m\nHeight (WGS84 ellipsoid): ${C.finite(h) ? h.toFixed(2) + " m" : "unavailable"}\nVertical accuracy: ${own.verticalAccuracy === null ? "unreported" : own.verticalAccuracy.toFixed(1) + " m"}\nSpeed: ${own.speed === null ? "unreported" : (own.speed * 3.6).toFixed(1) + " km/h"}\n${new Date(own.time).toISOString()}`,
@@ -677,9 +754,24 @@
       say(e.message, true);
       return;
     }
-    if (own && sample.time <= own.time) return;
-    own = sample;
-    updateOwn();
+    if (lastGpsTime !== null && sample.time <= lastGpsTime) return;
+    lastGpsTime = sample.time;
+    const quality = gpsSettings();
+    const decision = C.acceptSample(own, sample, {
+      ...quality,
+      interval: 0,
+      minDistance: 0,
+    });
+    if (decision.accept) {
+      own = sample;
+      updateOwn();
+    } else {
+      say(
+        `GPS reading rejected: ${decision.reason}. Waiting for a better fresh fix.`,
+        true,
+      );
+      updateOwn();
+    }
     if (record && !record.paused) {
       try {
         const prev = record.segments.at(-1)?.at(-1),
@@ -714,15 +806,17 @@
     if (!navigator.geolocation)
       throw Error("Geolocation is unavailable in this browser.");
     gpsSettings();
+    lastGpsTime = null;
+    own = null;
     watch = navigator.geolocation.watchPosition(
-      receivePosition,
+      safe(receivePosition),
       (e) => {
         say(`GPS: ${e.message}`, true);
         if (e.code === 1) stopGps();
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
     );
-    gpsTimer = setInterval(updateOwn, 1000);
+    gpsTimer = setInterval(safe(updateOwn), 1000);
     say("GPS requested. Allow location access in your browser.");
   }
   function stopGps() {
@@ -965,9 +1059,8 @@
       onlineElevation.delete(onlineElevation.keys().next().value);
     onlineElevation.set(path, pixels);
   }
-  maplibregl.addProtocol("fssnetdem", async (params, controller) => {
-    const path = params.url.replace("fssnetdem://", ""),
-      key = "dem:" + path;
+  async function loadOnlineElevation(path, controller) {
+    const key = "dem:" + path;
     let cached;
     try {
       cached = await dbOp("get", key);
@@ -993,7 +1086,10 @@
       if (keys.length < 256) await dbOp("put", key, bytes);
     } catch {}
     return { data: bytes };
-  });
+  }
+  maplibregl.addProtocol("fssnetdem", (params, controller) =>
+    loadOnlineElevation(params.url.replace("fssnetdem://", ""), controller),
+  );
   function removeLayer(id) {
     if (map.getLayer(id)) map.removeLayer(id);
   }
@@ -1021,6 +1117,19 @@
         attribution:
           '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>',
       };
+    if (type === "satellite" || type === "topographic") {
+      const service = type === "satellite" ? "World_Imagery" : "World_Topo_Map";
+      source = {
+        type: "raster",
+        tiles: [
+          `https://services.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/tile/{z}/{y}/{x}`,
+        ],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution:
+          'Tiles © Esri — Sources: Esri, Vantor, Earthstar Geographics, HERE, Garmin, Intermap, increment P Corp., GEBCO, USGS, FAO, NPS, NRCAN, GeoBase, IGN, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), OpenStreetMap contributors, GIS User Community. <a href="https://www.esri.com/en-us/legal/terms/data-attributions" target="_blank" rel="noopener">Data credits</a>',
+      };
+    }
     if (type === "custom") {
       const attribution = val("tile-attribution").trim();
       if (!attribution) throw Error("Enter your provider attribution.");
@@ -1243,6 +1352,12 @@
     config.catalog.forEach((zone) =>
       $(id).add(new Option(`DSM ${zone}`, `DSM ${zone}`)),
     );
+  for (const id of ["primary-format", "secondary-format", "entry-format"]) {
+    for (const zone of config.kalianpurCatalog || [])
+      $(id).add(new Option(`Kalianpur ${zone}`, `Kalianpur ${zone}`));
+    for (const system of ["DSM", "Kalianpur"])
+      $(id).add(new Option(`${system} Auto`, `${system} Auto`));
+  }
   try {
     db = await dbOpen();
     const saved = await dbOp("get", "project");
@@ -1389,22 +1504,24 @@
           } else map.easeTo({ center: e.lngLat, duration: 200 });
         }),
       );
-      map.on("move", updateCenter);
+      map.on("mousemove", (e) => {
+        cursorPoint = [C.wrap(e.lngLat.lng), e.lngLat.lat];
+        updateCenter();
+      });
+      map.on("mouseout", () => {
+        cursorPoint = null;
+        updateCenter();
+      });
+      map.on("move", () => {
+        cursorPoint = null;
+        updateCenter();
+      });
       map.on("moveend", () => {
         updateGrid();
         renderFeatures();
         persist();
       });
-      map.on("idle", () => {
-        const h = groundHeight(centerPoint());
-        set(
-          "center-height",
-          h === null
-            ? "Ground elevation unavailable"
-            : `Ground elevation: ${h.toFixed(1)} m · source DEM datum`,
-        );
-        set("terrain-readout", $("center-height").textContent);
-      });
+      map.on("idle", updateHeight);
       applyBasemap();
       renderFeatures();
       renderList();
@@ -1458,8 +1575,61 @@
     $("toggle-tools").setAttribute("aria-expanded", String(!hidden));
     map.resize();
   });
+  function openTools(panel) {
+    $("tools").classList.remove("collapsed");
+    $("toggle-tools").setAttribute("aria-expanded", "true");
+    showPanel(panel);
+    map.resize();
+  }
+  for (const [id, mode] of [
+    ["tool-browse", "browse"],
+    ["tool-point", "Point"],
+    ["tool-line", "LineString"],
+    ["tool-area", "Polygon"],
+  ]) {
+    on(id, "click", () => {
+      if (val("draw-mode") === mode) {
+        openTools("draw");
+        return;
+      }
+      openTools("draw");
+      $("draw-mode").value = mode;
+      $("draw-mode").dispatchEvent(new Event("change"));
+    });
+  }
+  for (const [id, panel] of [
+    ["tool-files", "landmarks"],
+    ["tool-layers", "layers"],
+    ["tool-gps", "gps"],
+    ["tool-terrain", "terrain"],
+    ["tool-settings", "settings"],
+    ["corner-layers", "layers"],
+  ])
+    on(id, "click", () => openTools(panel));
+  on("corner-own", "click", () => {
+    $("follow-location").checked = true;
+    cursorPoint = null;
+    startGps();
+    if (own && Date.now() - own.time <= 15000)
+      map.easeTo({ center: own.p, zoom: Math.max(16, map.getZoom()) });
+  });
+  on("corner-north", "click", () => {
+    $("orientation").value = "north";
+    $("perspective").checked = false;
+    map.setBearing(0);
+    map.setPitch(0);
+    say("True north up · level view");
+  });
+  on("basemap", "change", applyBasemap);
   on("panel-select", "change", () => showPanel(val("panel-select")));
   on("draw-mode", "change", () => {
+    for (const [id, mode] of [
+      ["tool-browse", "browse"],
+      ["tool-point", "Point"],
+      ["tool-line", "LineString"],
+      ["tool-area", "Polygon"],
+    ])
+      $(id).setAttribute("aria-pressed", String(val("draw-mode") === mode));
     draft = [];
     editing = null;
     refreshDraft();
@@ -1507,6 +1677,31 @@
     say("Landmark saved on this device.");
   });
   on("go-coordinate", "click", () => {
+    set("entry-candidates", "");
+    if (val("entry-format").endsWith(" Auto")) {
+      const system = val("entry-format").split(" ")[0];
+      const candidates = C.inverseCandidates(
+        val("entry-coord"),
+        system,
+        config,
+      );
+      set(
+        "entry-candidates",
+        candidates
+          .map((c) => `${c.zone}: ${C.formatCoord(c.p, "DD")}`)
+          .join("\n") || "No compatible supported zone.",
+      );
+      if (candidates.length !== 1)
+        throw Error(
+          "Choose a source zone from the candidates using the map sheet. Grid numbers alone are ambiguous.",
+        );
+      map.easeTo({
+        center: candidates[0].p,
+        zoom: Math.max(map.getZoom(), 14),
+      });
+      say(`Source zone detected: ${candidates[0].zone}`);
+      return;
+    }
     const p = C.parsePosition(
       val("entry-coord"),
       val("entry-format"),
@@ -1676,6 +1871,10 @@
   on("gps-stop", "click", stopGps);
   on("mark-own", "click", () => {
     const s = freshOwn();
+    if (s.accuracy > gpsSettings().maxAccuracy)
+      throw Error(
+        "Wait for a fix within your maximum accuracy radius before marking.",
+      );
     addFeatures([
       C.feature("Point", s.p, `GPS point ${state.features.length + 1}`, {
         samples: [s],
@@ -1873,6 +2072,7 @@
   });
   on("apply-terrain", "click", applyTerrain);
   on("clear-dem", "click", async () => {
+    $("cursor-elevation").checked = false;
     $("terrain-source").value = "none";
     $("terrain-colors").checked = false;
     $("slope-layer").checked = false;
@@ -1883,6 +2083,8 @@
       if (String(key).startsWith("dem:")) await dbOp("delete", key);
     hgts = [];
     onlineElevation.clear();
+    updateHeight();
+    persist();
     set("hgt-list", "Stored elevation data cleared.");
     say(
       "Elevation cache cleared. Reimport valid HGT files or enable online terrain to reload.",
@@ -1924,6 +2126,8 @@
     if (watch !== null) navigator.geolocation.clearWatch(watch);
     clearInterval(gpsTimer);
     downloadController?.abort();
+    clearTimeout(elevationTimer);
+    elevationController?.abort();
     window.removeEventListener("deviceorientation", orientationEvent);
     window.removeEventListener("deviceorientationabsolute", orientationEvent);
   });

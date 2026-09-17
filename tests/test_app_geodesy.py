@@ -38,7 +38,7 @@ class AppGeodesyTests(unittest.TestCase):
                     "Zone IVa", "Zone IVb", "Zone Va", "Zone Vb"]
         for key, page in [("grid_to_latlon_zone", "Grid to Lat/Lon"), ("batch_source_zone", "Batch Process"), ("esm_dsm_source", "ESM to DSM")]:
             self.app.radio("app_menu").set_value(page).run()
-            self.assertEqual(self.app.selectbox(key).options, expected)
+            self.assertEqual(self.app.selectbox(key).options, expected + ["Auto (source candidates)"])
 
     def test_original_kalianpur_identifier_is_visible_with_missing_definition(self):
         self.app.radio("app_menu").set_value("Grid to Lat/Lon").run()

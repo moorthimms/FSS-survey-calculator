@@ -19,6 +19,25 @@
         ><button id="toggle-tools" aria-expanded="true">☰ Map tools</button>
       </div>
     </header>
+    <nav id="map-toolbar" aria-label="Map toolbar">
+      <button
+        id="tool-browse"
+        aria-pressed="true"
+        title="Pan and select landmarks"
+      >
+        ✋ Pan
+      </button>
+      <button id="tool-point" title="Place a waypoint">⌖ Point</button>
+      <button id="tool-line" title="Draw a route and measure distance">
+        ↗ Distance
+      </button>
+      <button id="tool-area" title="Draw and measure a polygon">▱ Area</button>
+      <button id="tool-files">▤ Landmarks</button>
+      <button id="tool-layers">▧ Layers</button>
+      <button id="tool-gps">◎ GPS</button>
+      <button id="tool-terrain">△ Terrain</button>
+      <button id="tool-settings">⚙ Display</button>
+    </nav>
     <main>
       <aside id="tools">
         <label class="section-label" for="panel-select">MAP TOOLS</label
@@ -99,6 +118,7 @@
                 hemisphere</label
               >
             </div>
+            <div id="entry-candidates" class="readout"></div>
             <button id="go-coordinate">Go to location</button
             ><small
               >DD: latitude, longitude. UTM/DSM: easting, northing in metres.
@@ -215,7 +235,7 @@
           </div>
           <div id="record-state" class="readout">Recorder idle</div>
           <details>
-            <summary>Recorder quality settings</summary>
+            <summary>Position & recorder quality settings</summary>
             <label
               >Minimum interval (seconds)<input
                 id="gps-interval"
@@ -313,6 +333,8 @@
           <label
             >Base map<select id="basemap">
               <option value="osm">OpenStreetMap · online</option>
+              <option value="satellite">Satellite imagery · Esri online</option>
+              <option value="topographic">Topographic · Esri online</option>
               <option value="blank">Blank · offline</option>
               <option value="custom">Custom XYZ · online</option>
               <option value="mbtiles">Imported MBTiles · offline</option>
@@ -398,6 +420,16 @@
         </section>
         <section id="panel-terrain" class="panel" hidden>
           <h2>Elevation & terrain</h2>
+          <label class="check"
+            ><input id="cursor-elevation" type="checkbox" checked />Automatic
+            cursor terrain height (online)</label
+          >
+          <small
+            >Uses cached terrain tiles where available. Online requests reveal
+            the viewed map area to the elevation provider. Imported HGT takes
+            priority when selected. Ground elevation is not antenna
+            height.</small
+          >
           <label
             >Elevation source<select id="terrain-source">
               <option value="none">Off</option>
@@ -462,8 +494,8 @@
               <option>MGRS</option>
             </select></label
           ><label class="check"
-            ><input id="show-coordinates" type="checkbox" checked /> Show center
-            coordinates</label
+            ><input id="show-coordinates" type="checkbox" checked /> Show cursor
+            / center coordinates</label
           ><label class="check"
             ><input id="primary-grid" type="checkbox" /> Primary coordinate
             grid</label
@@ -521,6 +553,24 @@
       </aside>
       <div id="map-column">
         <div id="map" aria-label="Interactive field map"></div>
+        <div id="map-corner" aria-label="Position and orientation">
+          <button
+            id="corner-own"
+            title="Start high-accuracy GPS and center own position"
+          >
+            ◎ Locate me
+          </button>
+          <button id="corner-north" title="Return to true north up">
+            ↑ North up
+          </button>
+          <button
+            id="corner-layers"
+            title="Choose street, satellite, topographic or offline maps"
+          >
+            ▧ Maps
+          </button>
+          <span id="own-summary">GPS off · height unavailable</span>
+        </div>
         <button
           id="crosshair"
           title="Add the center to the current drawing"
@@ -529,11 +579,14 @@
           ＋
         </button>
         <div id="coordinates" class="overlay">
-          <b id="coord-primary">Loading map…</b
-          ><span id="coord-secondary"></span><span id="center-height"></span>
+          <small id="coordinate-context">Map center</small
+          ><b id="coord-primary">Loading map…</b
+          ><span id="coord-secondary"></span><span id="coord-wgs"></span
+          ><span id="coord-dsm"></span><span id="coord-kalianpur"></span
+          ><span id="center-height"></span>
         </div>
         <div id="map-badge" class="overlay">
-          WGS84 · ellipsoidal measurements
+          WGS84 · ellipsoidal measurements · Kalianpur datum accuracy ≈22 m
         </div>
         <div id="message" role="status" aria-live="polite">
           Loading map tools…

@@ -36,6 +36,7 @@ try:
     from geodesy import (
         DSM_TABLE, DSM_ZONES, DSM_ZONE_CATALOG, ENHANCED_KALIANPUR_ZONES,
         KALIANPUR_ZONE_CATALOG, ORIGINAL_ZONE_CATALOG,
+        AUTO_SOURCE_ZONE, inverse_zone_candidates, resolve_source_zone,
         detect_dsm_zone, dsm_to_kalianpur, dsm_to_wgs84, dsm_zone_candidates,
         detect_kalianpur_zone, kalianpur_to_dsm, kalianpur_to_wgs84,
         kalianpur_transformer, wgs84_to_dsm, wgs84_to_kalianpur,
@@ -251,9 +252,25 @@ DSM_NOTE = (
 
 
 def show_zone_definition_status(system, zone):
+    if zone == AUTO_SOURCE_ZONE:
+        st.caption("Auto checks every verified source zone. Overlapping candidates require your map-sheet zone.")
+        return
     issue = zone_definition_issue(system, zone)
     if issue:
         st.info(issue)
+
+
+def show_source_candidates(system, easting, northing, selected):
+    if selected != AUTO_SOURCE_ZONE:
+        return
+    try:
+        candidates = inverse_zone_candidates(system, easting, northing)
+        if candidates:
+            st.dataframe(pd.DataFrame(candidates), hide_index=True)
+        else:
+            st.info("No supported source zone matches these coordinates.")
+    except ValueError as exc:
+        st.info(str(exc))
 
 
 def show_zone_catalog(system):
@@ -595,7 +612,7 @@ if page == "Grid to Lat/Lon":
     
     grid_zone = st.selectbox(
         "Source Kalianpur Zone",
-        list(KALIANPUR_ZONE_CATALOG),
+        [*KALIANPUR_ZONE_CATALOG, AUTO_SOURCE_ZONE],
         key="grid_to_latlon_zone",
     )
     show_zone_definition_status("Kalianpur 1975", grid_zone)
@@ -604,6 +621,7 @@ if page == "Grid to Lat/Lon":
     with cg2: g_n = st.text_input("Northing (m)", "756073.40")
     with cg3: g_h = st.text_input("Height (m)", "0")
     
+    show_source_candidates("Kalianpur 1975", g_e, g_n, grid_zone)
     if st.button("Convert to Lat/Lon"):
         try:
             ve, vn = validate_input(g_e), validate_input(g_n)
@@ -613,6 +631,7 @@ if page == "Grid to Lat/Lon":
             if vh is None:
                 vh = 0.0
 
+            grid_zone = resolve_source_zone("Kalianpur 1975", ve, vn, grid_zone)
             wgs_lon, wgs_lat = kalianpur_to_wgs84(ve, vn, grid_zone)
             source_epsg = ENHANCED_KALIANPUR_ZONES[grid_zone]["epsg"]
             show_kalianpur_accuracy(grid_zone)
@@ -631,13 +650,15 @@ if page == "Grid to Lat/Lon":
 if page == "ESM to DSM":
     st.markdown('<div class="header-style">🔄 ESM Grid to DSM Grid</div>', unsafe_allow_html=True)
     st.caption(DSM_NOTE)
-    esm_source_zone = st.selectbox("Source ESM zone", list(KALIANPUR_ZONE_CATALOG), key="esm_dsm_source")
+    esm_source_zone = st.selectbox("Source ESM zone", [*KALIANPUR_ZONE_CATALOG, AUTO_SOURCE_ZONE], key="esm_dsm_source")
     show_zone_definition_status("Kalianpur 1975", esm_source_zone)
     esm_target_zone = dsm_target_selector("esm_dsm_target")
     esm_e = st.text_input("ESM Easting (m)", "3877983.50", key="esm_dsm_e")
     esm_n = st.text_input("ESM Northing (m)", "756073.40", key="esm_dsm_n")
+    show_source_candidates("Kalianpur 1975", esm_e, esm_n, esm_source_zone)
     if st.button("Convert ESM -> DSM"):
         try:
+            esm_source_zone = resolve_source_zone("Kalianpur 1975", esm_e, esm_n, esm_source_zone)
             zone, e, n = kalianpur_to_dsm(esm_e, esm_n, esm_source_zone, esm_target_zone)
             show_dsm_result(zone, e, n)
             show_kalianpur_accuracy(esm_source_zone)
@@ -648,12 +669,14 @@ if page == "DSM to Lat/Lon":
     st.markdown('<div class="header-style">↩️ DSM Grid to WGS84 Lat/Lon</div>', unsafe_allow_html=True)
     st.caption(DSM_NOTE)
     st.caption("Enter full metre coordinates. Shortened grid references also require their grid-square identification.")
-    dsm_source_zone = st.selectbox("Source DSM zone", list(DSM_ZONE_CATALOG), index=7, key="dsm_latlon_source")
+    dsm_source_zone = st.selectbox("Source DSM zone", [*DSM_ZONE_CATALOG, AUTO_SOURCE_ZONE], index=7, key="dsm_latlon_source")
     show_zone_definition_status("DSM", dsm_source_zone)
     dsm_e = st.text_input("DSM Easting (m)", "500000", key="dsm_latlon_e")
     dsm_n = st.text_input("DSM Northing (m)", "500000", key="dsm_latlon_n")
+    show_source_candidates("DSM", dsm_e, dsm_n, dsm_source_zone)
     if st.button("Convert DSM -> Lat/Lon"):
         try:
+            dsm_source_zone = resolve_source_zone("DSM", dsm_e, dsm_n, dsm_source_zone)
             lon, lat = dsm_to_wgs84(dsm_e, dsm_n, dsm_source_zone)
             st.success(f"DSM {dsm_source_zone} → WGS84 (EPSG:4326): {lat:.8f}°, {lon:.8f}°")
             st.code(f"{decimal_to_dms(lat, 'lat')}, {decimal_to_dms(lon, 'lon')}", language="text")
@@ -663,12 +686,14 @@ if page == "DSM to Lat/Lon":
 if page == "DSM to ESM":
     st.markdown('<div class="header-style">↩️ DSM Grid to ESM Grid</div>', unsafe_allow_html=True)
     st.caption(DSM_NOTE)
-    dsm_esm_zone = st.selectbox("Source DSM zone", list(DSM_ZONE_CATALOG), index=7, key="dsm_esm_source")
+    dsm_esm_zone = st.selectbox("Source DSM zone", [*DSM_ZONE_CATALOG, AUTO_SOURCE_ZONE], index=7, key="dsm_esm_source")
     show_zone_definition_status("DSM", dsm_esm_zone)
     dsm_esm_e = st.text_input("DSM Easting (m)", "500000", key="dsm_esm_e")
     dsm_esm_n = st.text_input("DSM Northing (m)", "500000", key="dsm_esm_n")
+    show_source_candidates("DSM", dsm_esm_e, dsm_esm_n, dsm_esm_zone)
     if st.button("Convert DSM -> ESM"):
         try:
+            dsm_esm_zone = resolve_source_zone("DSM", dsm_esm_e, dsm_esm_n, dsm_esm_zone)
             zone, epsg, e, n = dsm_to_kalianpur(dsm_esm_e, dsm_esm_n, dsm_esm_zone)
             st.success(f"ESM Grid Result ({zone}, EPSG:{epsg}): E {e:.3f} m, N {n:.3f} m")
             show_kalianpur_accuracy(zone)
@@ -735,11 +760,11 @@ if page == "Batch Process":
     batch_from_wgs = batch_operation.startswith("WGS84")
     batch_to_dsm = batch_operation.endswith("-> DSM grid")
     if batch_from_dsm:
-        batch_dsm_source = st.selectbox("Source DSM zone", list(DSM_ZONE_CATALOG), index=7, key="batch_dsm_source")
+        batch_dsm_source = st.selectbox("Source DSM zone", [*DSM_ZONE_CATALOG, AUTO_SOURCE_ZONE], index=7, key="batch_dsm_source")
         show_zone_definition_status("DSM", batch_dsm_source)
-        st.caption("All uploaded rows must use this source DSM zone and full metre coordinates.")
+        st.caption("Use full metre coordinates. A selected zone applies to every row; Auto checks each row and reports ambiguous candidates.")
     elif not batch_from_wgs:
-        batch_zone = st.selectbox("Source Kalianpur Zone", list(KALIANPUR_ZONE_CATALOG), key="batch_source_zone")
+        batch_zone = st.selectbox("Source Kalianpur Zone", [*KALIANPUR_ZONE_CATALOG, AUTO_SOURCE_ZONE], key="batch_source_zone")
         show_zone_definition_status("Kalianpur 1975", batch_zone)
     if batch_to_dsm:
         batch_dsm_target = dsm_target_selector("batch_dsm_target")
@@ -784,23 +809,25 @@ if page == "Batch Process":
                         if not batch_from_wgs:
                             result["source_zone"] = batch_dsm_source if batch_from_dsm else batch_zone
                         try:
+                            row_dsm_zone = resolve_source_zone("DSM", row["easting"], row["northing"], batch_dsm_source) if batch_from_dsm else None
+                            row_k_zone = resolve_source_zone("Kalianpur 1975", row["easting"], row["northing"], batch_zone) if not batch_from_wgs and not batch_from_dsm else None
                             if batch_operation == "Kalianpur grid -> WGS84":
-                                lon, lat = kalianpur_to_wgs84(row["easting"], row["northing"], batch_zone)
-                                result.update(lat=lat, lon=lon, source_zone=batch_zone, target_crs="EPSG:4326")
+                                lon, lat = kalianpur_to_wgs84(row["easting"], row["northing"], row_k_zone)
+                                result.update(lat=lat, lon=lon, source_zone=row_k_zone, target_crs="EPSG:4326")
                             elif batch_operation == "DSM grid -> WGS84":
-                                lon, lat = dsm_to_wgs84(row["easting"], row["northing"], batch_dsm_source)
-                                result.update(lat=lat, lon=lon, source_zone=batch_dsm_source, target_crs="EPSG:4326")
+                                lon, lat = dsm_to_wgs84(row["easting"], row["northing"], row_dsm_zone)
+                                result.update(lat=lat, lon=lon, source_zone=row_dsm_zone, target_crs="EPSG:4326")
                             elif batch_operation == "WGS84 -> DSM grid":
                                 zone, e, n = wgs84_to_dsm(row["lat"], row["lon"], batch_dsm_target)
                                 result.update(easting=e, northing=n, target_zone=zone, target_crs="DSM / WGS84 LCC (supplied parameters)")
                             elif batch_operation == "Kalianpur grid -> DSM grid":
-                                zone, e, n = kalianpur_to_dsm(row["easting"], row["northing"], batch_zone, batch_dsm_target)
-                                result.update(easting=e, northing=n, source_zone=batch_zone, target_zone=zone,
+                                zone, e, n = kalianpur_to_dsm(row["easting"], row["northing"], row_k_zone, batch_dsm_target)
+                                result.update(easting=e, northing=n, source_zone=row_k_zone, target_zone=zone,
                                               target_crs="DSM / WGS84 LCC (supplied parameters)",
-                                              datum_accuracy_m=kalianpur_transformer(batch_zone).accuracy)
+                                              datum_accuracy_m=kalianpur_transformer(row_k_zone).accuracy)
                             else:
-                                zone, epsg, e, n = dsm_to_kalianpur(row["easting"], row["northing"], batch_dsm_source)
-                                result.update(easting=e, northing=n, source_zone=batch_dsm_source, target_zone=zone,
+                                zone, epsg, e, n = dsm_to_kalianpur(row["easting"], row["northing"], row_dsm_zone)
+                                result.update(easting=e, northing=n, source_zone=row_dsm_zone, target_zone=zone,
                                               target_crs=f"EPSG:{epsg}", datum_accuracy_m=kalianpur_transformer(zone).accuracy)
                             result["status"] = "Success"
                         except Exception as exc:

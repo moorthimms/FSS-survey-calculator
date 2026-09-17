@@ -20,6 +20,7 @@ class AppDsmTests(unittest.TestCase):
         self.assertFalse(self.app.exception)
 
     def test_wgs84_to_dsm_uses_full_zone_parameters(self):
+        self.app.radio("app_menu").set_value("Lat/Lon to Grid").run()
         self.app.selectbox("forward_grid_system").select("DSM (WGS84 LCC)").run()
         labeled(self.app.button, "Convert to Grid").click().run()
         self.assertFalse(self.app.error)
@@ -30,6 +31,7 @@ class AppDsmTests(unittest.TestCase):
         self.assertNotIn("EPSG:", result)
 
     def test_dsm_inverse_uses_the_selected_zone(self):
+        self.app.radio("app_menu").set_value("DSM to Lat/Lon").run()
         self.app.selectbox("dsm_latlon_source").select("8E")
         labeled(self.app.button, "Convert DSM -> Lat/Lon").click().run()
         self.assertFalse(self.app.error)
@@ -38,21 +40,25 @@ class AppDsmTests(unittest.TestCase):
         self.assertIn("96.00000000", result)
 
     def test_esm_and_dsm_conversion_screens_work(self):
+        self.app.radio("app_menu").set_value("ESM to DSM").run()
         labeled(self.app.button, "Convert ESM -> DSM").click().run()
         self.assertFalse(self.app.error)
         self.assertTrue(any("DSM Grid Result (6D)" in x.value for x in self.app.markdown))
+        self.app.radio("app_menu").set_value("DSM to ESM").run()
         labeled(self.app.button, "Convert DSM -> ESM").click().run()
         self.assertFalse(self.app.error)
         self.assertTrue(any("ESM Grid Result (Zone I, EPSG:24378)" in x.value for x in self.app.success))
         self.assertTrue(any("expected accuracy: 22 m" in x.value for x in self.app.caption))
 
     def test_unsupported_esm_result_does_not_fall_back_to_zone_i(self):
+        self.app.radio("app_menu").set_value("DSM to ESM").run()
         self.app.selectbox("dsm_esm_source").select("6C")
         labeled(self.app.button, "Convert DSM -> ESM").click().run()
         self.assertTrue(any("Outside supported Kalianpur" in x.value for x in self.app.error))
         self.assertFalse(any("ESM Grid Result" in x.value for x in self.app.success))
 
     def test_ambiguous_dsm_auto_zone_requires_a_selection(self):
+        self.app.radio("app_menu").set_value("Lat/Lon to Grid").run()
         self.app.selectbox("forward_grid_system").select("DSM (WGS84 LCC)").run()
         labeled(self.app.text_input, "Lat (Deg)").input("30")
         labeled(self.app.text_input, "Lon (Deg)").input("78")
@@ -64,6 +70,7 @@ class AppDsmTests(unittest.TestCase):
         self.assertTrue(any("DSM Grid Result (6D)" in x.value for x in self.app.markdown))
 
     def test_batch_dsm_inverse_uses_selected_source_and_rejects_nan(self):
+        self.app.radio("app_menu").set_value("Batch Process").run()
         csv = "easting,northing,point_id\n500000,500000,P1\nnan,500000,P2\n"
         with patch("streamlit.file_uploader", side_effect=lambda *a, **k: io.StringIO(csv)):
             self.app.selectbox("batch_operation").select("DSM grid -> WGS84").run()
@@ -77,6 +84,7 @@ class AppDsmTests(unittest.TestCase):
         self.assertTrue(results.iloc[1]["status"].startswith("Error:"))
 
     def test_batch_wgs84_to_dsm_includes_zone_and_rejects_missing_coverage(self):
+        self.app.radio("app_menu").set_value("Batch Process").run()
         csv = "lat,lon,point_id\n30.3165,78.0322,P1\n39,88,P2\n"
         with patch("streamlit.file_uploader", side_effect=lambda *a, **k: io.StringIO(csv)):
             self.app.selectbox("batch_operation").select("WGS84 -> DSM grid").run()
@@ -88,6 +96,7 @@ class AppDsmTests(unittest.TestCase):
         self.assertTrue(results.iloc[1]["status"].startswith("Error:"))
 
     def test_both_esm_dsm_batch_directions(self):
+        self.app.radio("app_menu").set_value("Batch Process").run()
         cases = [
             ("Kalianpur grid -> DSM grid", "3877983.50,756073.40", "6D"),
             ("DSM grid -> Kalianpur grid", "500000,500000", "Zone I"),
@@ -105,6 +114,7 @@ class AppDsmTests(unittest.TestCase):
                 self.assertEqual(result["datum_accuracy_m"], 22)
 
     def test_own_position_can_show_dsm_outside_kalianpur_coverage(self):
+        self.app.radio("app_menu").set_value("Own Position").run()
         location = {"timestamp": time.time() * 1000, "coords": {"latitude": 7.9, "longitude": 77, "accuracy": 5}}
         with patch("streamlit_js_eval.streamlit_js_eval", return_value=location):
             self.app.checkbox("get_pos_checkbox").check().run()
@@ -114,6 +124,7 @@ class AppDsmTests(unittest.TestCase):
         self.assertTrue(any("**DSM zone:** 6H" in x.value for x in self.app.markdown))
 
     def test_reference_displays_only_supplied_rows_and_precise_scales(self):
+        self.app.radio("app_menu").set_value("Zone List").run()
         labeled(self.app.radio, "Select System").set_value("DSM (WGS84 LCC)").run()
         self.assertFalse(self.app.exception)
         table = self.app.dataframe[-1].value
@@ -129,16 +140,21 @@ class AppDsmTests(unittest.TestCase):
 
     def test_all_dsm_selectors_keep_missing_parameter_entries(self):
         expected = [f"{column}{band}" for column in "5678" for band in "CDEFGH"]
-        for key in ["dsm_latlon_source", "dsm_esm_source"]:
+        for key, page in [("dsm_latlon_source", "DSM to Lat/Lon"), ("dsm_esm_source", "DSM to ESM")]:
+            self.app.radio("app_menu").set_value(page).run()
             self.assertEqual(self.app.selectbox(key).options, expected)
-        for key in ["esm_dsm_target", "position_dsm_zone"]:
+        for key, page in [("esm_dsm_target", "ESM to DSM"), ("position_dsm_zone", "Own Position")]:
+            self.app.radio("app_menu").set_value(page).run()
             self.assertEqual(self.app.selectbox(key).options[1:], expected)
+        self.app.radio("app_menu").set_value("Lat/Lon to Grid").run()
         self.app.selectbox("forward_grid_system").select("DSM (WGS84 LCC)").run()
         self.assertEqual(self.app.selectbox("forward_dsm_zone").options[1:], expected)
+        self.app.radio("app_menu").set_value("Batch Process").run()
         self.app.selectbox("batch_operation").select("DSM grid -> WGS84").run()
         self.assertEqual(self.app.selectbox("batch_dsm_source").options, expected)
 
     def test_original_dsm_identifier_is_retained_without_using_foreign_crs(self):
+        self.app.radio("app_menu").set_value("DSM to Lat/Lon").run()
         self.app.selectbox("dsm_latlon_source").select("7C")
         labeled(self.app.button, "Convert DSM -> Lat/Lon").click().run()
         self.assertFalse(self.app.exception)

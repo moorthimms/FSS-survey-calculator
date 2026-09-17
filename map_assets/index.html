@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>FSS Field Map</title>
+    <style>
+      /* FSS_STYLES */
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <b>FSS <span>FIELD MAP</span></b
+        ><small>Plan with precision. Explore with context.</small>
+      </div>
+      <div class="header-actions">
+        <span id="save-status">Loading local project…</span
+        ><button id="toggle-tools" aria-expanded="true">☰ Map tools</button>
+      </div>
+    </header>
+    <main>
+      <aside id="tools">
+        <label class="section-label" for="panel-select">MAP TOOLS</label
+        ><select id="panel-select">
+          <option value="draw">Mark & measure</option>
+          <option value="landmarks">Landmarks & files</option>
+          <option value="gps">GPS & navigation</option>
+          <option value="layers">Maps & offline areas</option>
+          <option value="terrain">Elevation & terrain</option>
+          <option value="settings">Display & field help</option>
+        </select>
+        <section id="panel-draw" class="panel">
+          <h2>Mark & measure</h2>
+          <p>Tap a location, or pan the map and use the center crosshair.</p>
+          <label
+            >Drawing tool<select id="draw-mode">
+              <option value="browse">Browse / select</option>
+              <option value="Point">Waypoint</option>
+              <option value="LineString">Route / distance</option>
+              <option value="Polygon">Area / property</option>
+            </select></label
+          >
+          <label
+            >Name<input
+              id="draw-name"
+              maxlength="160"
+              placeholder="e.g. Boundary survey"
+          /></label>
+          <div class="pair">
+            <label
+              >Color<input
+                id="draw-color"
+                type="color"
+                value="#167c80" /></label
+            ><label
+              >Symbol<select id="draw-symbol">
+                <option value="pin">Pin</option>
+                <option value="flag">Flag</option>
+                <option value="camp">Camp</option>
+                <option value="survey">Survey</option>
+              </select></label
+            >
+          </div>
+          <div class="pair">
+            <button id="add-center">Add center point</button
+            ><button id="undo">Undo vertex</button>
+          </div>
+          <div id="measure" class="readout">
+            Choose a drawing tool to begin.
+          </div>
+          <div class="pair">
+            <button id="save-drawing" class="primary">Save landmark</button
+            ><button id="cancel-drawing">Cancel drawing</button>
+          </div>
+          <details>
+            <summary>Go to coordinates</summary>
+            <label
+              >Entry format<select id="entry-format">
+                <option>DD</option>
+                <option>UTM</option>
+                <option>MGRS</option>
+              </select></label
+            ><label
+              >Coordinates<input
+                id="entry-coord"
+                placeholder="Latitude, longitude or easting, northing"
+            /></label>
+            <div class="pair">
+              <label
+                >UTM zone<input
+                  id="entry-zone"
+                  type="number"
+                  min="1"
+                  max="60"
+                  value="43" /></label
+              ><label class="check"
+                ><input type="checkbox" id="entry-south" /> Southern
+                hemisphere</label
+              >
+            </div>
+            <button id="go-coordinate">Go to location</button
+            ><small
+              >DD: latitude, longitude. UTM/DSM: easting, northing in metres.
+              MGRS: one reference.</small
+            >
+          </details>
+        </section>
+        <section id="panel-landmarks" class="panel" hidden>
+          <h2>Landmarks & files</h2>
+          <label>Search<input id="search" placeholder="Name or folder" /></label
+          ><label
+            >Folder<select id="folder-filter">
+              <option value="">All folders</option>
+            </select></label
+          >
+          <div id="landmark-list" class="landmark-list"></div>
+          <button id="restore-delete">Restore last deletion</button>
+          <div id="editor" hidden>
+            <h3>Selected landmark</h3>
+            <label>Name<input id="edit-name" maxlength="160" /></label
+            ><label>Folder<input id="edit-folder" maxlength="100" /></label
+            ><label
+              >Description<textarea
+                id="edit-description"
+                rows="2"
+                maxlength="3000"
+              ></textarea></label
+            ><label>Color<input id="edit-color" type="color" /></label
+            ><label
+              >Symbol<select id="edit-symbol">
+                <option value="pin">Pin</option>
+                <option value="flag">Flag</option>
+                <option value="camp">Camp</option>
+                <option value="survey">Survey</option>
+              </select></label
+            ><label class="check"
+              ><input type="checkbox" id="edit-visible" /> Show on map</label
+            >
+            <div class="pair">
+              <button id="save-edit">Save details</button
+              ><button id="zoom-selected">Zoom to</button>
+            </div>
+            <div class="pair">
+              <button id="edit-vertices">Edit vertices</button
+              ><button id="delete-selected" class="danger">
+                Delete landmark
+              </button>
+            </div>
+            <small
+              >Vertex editing replaces geometry when saved. Track timestamps are
+              cleared after geometry changes.</small
+            >
+            <div id="selected-stats" class="readout"></div>
+            <button id="profile-open">Open dynamic profile</button
+            ><button id="nav-selected">Navigate / follow path</button>
+          </div>
+          <details open>
+            <summary>Import & export</summary>
+            <label
+              >Import landmarks<input
+                id="import-files"
+                type="file"
+                multiple
+                accept=".gpx,.kml,.kmz,.geojson,.json,.csv" /></label
+            ><small
+              >GPX, KML/KMZ, GeoJSON, CSV and FSS project JSON. Data stays on
+              this device. Raster overlays inside KMZ are not imported.</small
+            ><label
+              >Export selection<select id="export-scope">
+                <option value="all">All landmarks</option>
+                <option value="folder">Current folder</option>
+                <option value="selected">Selected landmark</option>
+              </select></label
+            ><label
+              >Format<select id="export-format">
+                <option value="geojson">GeoJSON (complete geometry)</option>
+                <option value="gpx">GPX (areas become boundary tracks)</option>
+                <option value="kml">KML</option>
+                <option value="kmz">KMZ</option>
+                <option value="csv">CSV (one row per vertex)</option>
+              </select></label
+            >
+            <div class="pair">
+              <button id="export">Export file</button
+              ><button id="share">Share file</button>
+            </div>
+            <button id="backup">Download project backup</button
+            ><small
+              >Sharing opens the device share sheet when supported; otherwise a
+              download is provided. No message is sent automatically.</small
+            >
+          </details>
+        </section>
+        <section id="panel-gps" class="panel" hidden>
+          <h2>GPS & navigation</h2>
+          <div class="pair">
+            <button id="gps-start" class="primary">Start GPS</button
+            ><button id="gps-stop">Stop GPS</button>
+          </div>
+          <label class="check"
+            ><input id="follow-location" type="checkbox" checked /> Keep own
+            position centered</label
+          >
+          <div id="gps-readout" class="readout">
+            GPS is off. Height appears when reported by your device.
+          </div>
+          <div class="pair">
+            <button id="mark-own">Mark own position</button
+            ><button id="record-start">Record track</button>
+          </div>
+          <div class="pair">
+            <button id="record-pause">Pause / resume</button
+            ><button id="record-stop">Finish recording</button>
+          </div>
+          <div id="record-state" class="readout">Recorder idle</div>
+          <details>
+            <summary>Recorder quality settings</summary>
+            <label
+              >Minimum interval (seconds)<input
+                id="gps-interval"
+                type="number"
+                min="1"
+                max="60"
+                value="2" /></label
+            ><label
+              >Maximum horizontal accuracy radius (m)<input
+                id="gps-accuracy"
+                type="number"
+                min="1"
+                max="1000"
+                value="30" /></label
+            ><label
+              >Skip movement below (m; 0 disables)<input
+                id="gps-distance"
+                type="number"
+                min="0"
+                max="100"
+                value="3" /></label
+            ><label
+              >Reject speed above (m/s)<input
+                id="gps-speed"
+                type="number"
+                min="1"
+                max="400"
+                value="60" /></label
+            ><label
+              >Break track after a gap (seconds)<input
+                id="gps-gap"
+                type="number"
+                min="5"
+                max="600"
+                value="30" /></label
+            ><small
+              >Filters reject readings; they do not create RTK accuracy. Raw
+              accepted heights and uncertainty are retained. No smoothing alters
+              recorded points.</small
+            >
+          </details>
+          <h3>Navigation</h3>
+          <label
+            >Destination / path<select id="nav-target">
+              <option value="">Choose a landmark</option>
+            </select></label
+          >
+          <div class="pair">
+            <button id="nav-start">Start navigation</button
+            ><button id="nav-stop">Stop navigation</button>
+          </div>
+          <label
+            >Proximity alert (m)<input
+              id="proximity"
+              type="number"
+              min="1"
+              max="1000"
+              value="20" /></label
+          ><label
+            >Off-path alert (m)<input
+              id="off-path"
+              type="number"
+              min="5"
+              max="1000"
+              value="40" /></label
+          ><label class="check"
+            ><input id="audio-alerts" type="checkbox" /> Sound / vibration
+            alerts</label
+          >
+          <div id="nav-readout" class="readout">No active target.</div>
+          <div id="compass" aria-label="Compass">
+            <span>N</span>
+            <div id="compass-arrow">↑</div>
+            <small id="compass-text">Heading unavailable</small>
+          </div>
+          <button id="enable-compass">Enable device compass</button
+          ><label
+            >Map orientation<select id="orientation">
+              <option value="north">North up</option>
+              <option value="gps">GPS course up</option>
+              <option value="compass">Compass up</option>
+            </select></label
+          ><label class="check"
+            ><input id="perspective" type="checkbox" /> Explorer perspective
+            (60° tilt)</label
+          >
+          <small
+            >Navigation follows a straight line or your supplied path. It does
+            not calculate safe road turns or detect obstacles. Browser GPS may
+            pause when the screen locks or this page closes.</small
+          >
+        </section>
+        <section id="panel-layers" class="panel" hidden>
+          <h2>Maps & offline areas</h2>
+          <label
+            >Base map<select id="basemap">
+              <option value="osm">OpenStreetMap · online</option>
+              <option value="blank">Blank · offline</option>
+              <option value="custom">Custom XYZ · online</option>
+              <option value="mbtiles">Imported MBTiles · offline</option>
+              <option value="cache">Downloaded area · offline</option>
+            </select></label
+          ><label
+            >Custom XYZ URL<input
+              id="tile-url"
+              type="url"
+              placeholder="https://…/{z}/{x}/{y}.png" /></label
+          ><label
+            >Source attribution<input
+              id="tile-attribution"
+              placeholder="Provider name / license" /></label
+          ><button id="apply-basemap">Apply map source</button
+          ><label
+            >Map opacity<input
+              id="map-opacity"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value="1"
+          /></label>
+          <details open>
+            <summary>Import an offline atlas</summary>
+            <label
+              >Raster MBTiles<input
+                id="mbtiles-file"
+                type="file"
+                accept=".mbtiles"
+            /></label>
+            <div id="atlas-info" class="readout">No offline atlas loaded.</div>
+            <button id="clear-atlas">Remove stored atlas</button
+            ><small
+              >MOBAC: choose a permitted source, select the region and zooms,
+              export raster MBTiles, then import here. PNG/JPEG/WebP tiles
+              supported; vector PBF and proprietary AQM are not.</small
+            >
+          </details>
+          <details>
+            <summary>Select and save a map area</summary>
+            <button id="select-area">Use current map bounds</button>
+            <div id="area-bounds" class="readout">
+              Pan and zoom to the required area first.
+            </div>
+            <div class="pair">
+              <label
+                >Minimum zoom<input
+                  id="offline-min"
+                  type="number"
+                  min="0"
+                  max="18"
+                  value="10" /></label
+              ><label
+                >Maximum zoom<input
+                  id="offline-max"
+                  type="number"
+                  min="0"
+                  max="18"
+                  value="12"
+              /></label>
+            </div>
+            <button id="estimate-tiles">Estimate download</button>
+            <div id="download-estimate"></div>
+            <label class="check"
+              ><input id="offline-permitted" type="checkbox" /> My custom
+              provider permits offline downloading</label
+            >
+            <div class="pair">
+              <button id="download-tiles">Download area</button
+              ><button id="cancel-download">Cancel</button>
+            </div>
+            <progress id="download-progress" max="1" value="0"></progress>
+            <div id="download-state" class="readout"></div>
+            <button id="clear-tiles">Remove downloaded area</button
+            ><small
+              >Only a permitted custom HTTPS XYZ source can be downloaded. The
+              public OSM tile server prohibits offline bulk downloads. Limit:
+              500 tiles / 80 MB per area; CORS access is required.</small
+            >
+          </details>
+        </section>
+        <section id="panel-terrain" class="panel" hidden>
+          <h2>Elevation & terrain</h2>
+          <label
+            >Elevation source<select id="terrain-source">
+              <option value="none">Off</option>
+              <option value="hgt">Imported HGT · offline</option>
+              <option value="online">AWS Terrarium · online</option>
+            </select></label
+          ><label
+            >Import HGT tiles<input
+              id="hgt-files"
+              type="file"
+              multiple
+              accept=".hgt"
+          /></label>
+          <div id="hgt-list" class="readout">No HGT data loaded.</div>
+          <label class="check"
+            ><input id="terrain-3d" type="checkbox" /> 3D terrain relief</label
+          ><label class="check"
+            ><input id="hillshade" type="checkbox" checked /> Hillshade
+            overlay</label
+          ><label class="check"
+            ><input id="terrain-colors" type="checkbox" /> Terrain elevation
+            colors (HGT)</label
+          ><label class="check"
+            ><input id="slope-layer" type="checkbox" /> Slope colors
+            (HGT)</label
+          ><label
+            >Vertical exaggeration<input
+              id="exaggeration"
+              type="range"
+              min="1"
+              max="3"
+              step="0.25"
+              value="1" /></label
+          ><button id="apply-terrain">Apply elevation layers</button
+          ><button id="clear-dem">Clear stored elevation data</button>
+          <div id="terrain-readout" class="readout">
+            Ground elevation unavailable.
+          </div>
+          <small
+            >HGT ground elevation uses the source DEM's vertical datum (usually
+            EGM96 for SRTM), not GPS antenna height. Voids remain unavailable in
+            readouts; uncovered areas render flat in the terrain mesh. Online
+            terrain loads on demand while enabled and is cached in this browser,
+            subject to storage limits. Terrain colors and slope require
+            HGT.</small
+          >
+        </section>
+        <section id="panel-settings" class="panel" hidden>
+          <h2>Display & field help</h2>
+          <label
+            >Primary coordinates<select id="primary-format">
+              <option>DD</option>
+              <option>DMS</option>
+              <option>UTM</option>
+              <option>MGRS</option>
+            </select></label
+          ><label
+            >Secondary coordinates<select id="secondary-format">
+              <option>UTM</option>
+              <option>DD</option>
+              <option>DMS</option>
+              <option>MGRS</option>
+            </select></label
+          ><label class="check"
+            ><input id="show-coordinates" type="checkbox" checked /> Show center
+            coordinates</label
+          ><label class="check"
+            ><input id="primary-grid" type="checkbox" /> Primary coordinate
+            grid</label
+          ><label class="check"
+            ><input id="secondary-grid" type="checkbox" /> Secondary grid
+            (blue)</label
+          ><label
+            >Distance units<select id="distance-unit">
+              <option value="metric">Metres / kilometres</option>
+              <option value="imperial">Feet / miles</option>
+            </select></label
+          ><label
+            >Area units<select id="area-unit">
+              <option value="m2">Square metres</option>
+              <option value="ha">Hectares</option>
+              <option value="acres">Acres</option>
+              <option value="ft2">Square feet</option>
+            </select></label
+          ><label class="check"
+            ><input id="show-labels" type="checkbox" checked /> Waypoint
+            names</label
+          ><button id="persist-storage">
+            Request persistent device storage
+          </button>
+          <div id="storage-info" class="readout"></div>
+          <details open>
+            <summary>Field checks</summary>
+            <p>
+              GPS: use open sky, inspect the reported accuracy and wait for a
+              fresh fix. Location availability and update frequency are
+              controlled by your browser and phone.
+            </p>
+            <p>
+              Compass: keep away from magnets and metal; use your device's
+              calibration guidance. Device compass readings may reference
+              magnetic north. GPS course references true north while moving.
+            </p>
+            <p>
+              This web app cannot reset A-GPS, change Android battery
+              permissions, inspect raw satellites or guarantee recording with
+              the screen locked. Use the existing Own Position page for a
+              connected RTK receiver.
+            </p>
+            <p>
+              Online basemaps depict the provider's boundaries. For official
+              survey or boundary work, import an authoritative map. Decimal
+              precision is not an accuracy guarantee.
+            </p>
+            <p>
+              Local storage may be cleared by the browser. Download backups of
+              landmarks and retain original offline map / elevation files.
+            </p>
+          </details>
+        </section>
+      </aside>
+      <div id="map-column">
+        <div id="map" aria-label="Interactive field map"></div>
+        <button
+          id="crosshair"
+          title="Add the center to the current drawing"
+          aria-label="Add center crosshair"
+        >
+          ＋
+        </button>
+        <div id="coordinates" class="overlay">
+          <b id="coord-primary">Loading map…</b
+          ><span id="coord-secondary"></span><span id="center-height"></span>
+        </div>
+        <div id="map-badge" class="overlay">
+          WGS84 · ellipsoidal measurements
+        </div>
+        <div id="message" role="status" aria-live="polite">
+          Loading map tools…
+        </div>
+        <div id="profile-panel" hidden>
+          <div class="profile-header">
+            <b>Dynamic profile</b><button id="profile-close">Close</button>
+          </div>
+          <div class="pair">
+            <label
+              >X axis<select id="profile-x">
+                <option value="distance">Distance</option>
+                <option value="time">Time</option>
+              </select></label
+            ><label
+              >Left Y axis<select id="profile-y">
+                <option value="height">Height</option>
+                <option value="speed">Speed</option>
+                <option value="incline">Incline</option>
+                <option value="accuracy">Horizontal accuracy</option>
+                <option value="verticalAccuracy">Vertical accuracy</option>
+              </select></label
+            >
+          </div>
+          <label
+            >Right Y axis<select id="profile-y2">
+              <option value="none">None</option>
+              <option value="speed" selected>Speed</option>
+              <option value="height">Height</option>
+              <option value="incline">Incline</option>
+              <option value="accuracy">Horizontal accuracy</option>
+              <option value="verticalAccuracy">Vertical accuracy</option>
+            </select></label
+          ><canvas
+            id="profile-canvas"
+            width="900"
+            height="190"
+            aria-label="Track profile"
+          ></canvas>
+          <div id="profile-value"></div>
+          <input
+            id="profile-index"
+            type="range"
+            min="0"
+            max="0"
+            value="0"
+            aria-label="Profile sample"
+          />
+        </div>
+      </div>
+    </main>
+    <script>
+      /* FSS_SCRIPTS */
+    </script>
+  </body>
+</html>

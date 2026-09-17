@@ -46,10 +46,13 @@ except ImportError:
     st.stop()
 
 from own_position import gnss_dms, render_own_position
+from map_workspace import render_map_workspace
 
-# Custom CSS to mimic the Kivy app's style
+# Shared application theme
 st.markdown("""
     <style>
+    [data-testid="stSidebar"] { background: #edf3f5; }
+    .block-container { padding-top: 1.4rem; }
     .stButton>button {
         width: 100%;
         background-color: #1976D2;
@@ -365,17 +368,24 @@ with col1:
         st.write("FSS Logo")
 with col2:
     st.title("Advanced Surveying Calculator")
-    st.caption("Professional Geodetic Calculations & Advanced Coordinate Transformations")
+    st.caption("Field mapping, positioning and coordinate transformations")
 
-# Tabs
-tabs = st.tabs([
-    "Lat/Lon Calc", "Grid Calc", "DD to DMS", "DMS to DD", 
-    "Lat/Lon to Grid", "Grid to Lat/Lon", "ESM to DSM",
-    "DSM to Lat/Lon", "DSM to ESM", "Traverse", "Batch Process", "Own Position", "Zone List", "About"
-])
+# A single active page keeps the menu usable on phones and avoids rendering
+# every calculator and GPS component on each interaction.
+MENU_PAGES = ["Map", "Own Position", "Lat/Lon Calc", "Grid Calc", "Traverse",
+              "Lat/Lon to Grid", "Grid to Lat/Lon", "ESM to DSM", "DSM to Lat/Lon",
+              "DSM to ESM", "DD to DMS", "DMS to DD", "Batch Process", "Zone List", "About"]
+with st.sidebar:
+    st.markdown("## FSS · Field tools")
+    st.caption("Survey • Navigate • Convert")
+    page = st.radio("Menu", MENU_PAGES, key="app_menu")
+    st.caption("Map drawings and recordings stay in this browser. Export a project backup for safekeeping.")
+
+if page == "Map":
+    render_map_workspace()
 
 # --- TAB 1: LAT/LON CALCULATION ---
-with tabs[0]:
+if page == "Lat/Lon Calc":
     st.markdown('<div class="header-style">📍 Calculate Distance & Bearing (Lat/Lon)</div>', unsafe_allow_html=True)
     st.info("Input: Decimal degrees (e.g., 30.3165, 78.0322)")
     
@@ -455,7 +465,7 @@ with tabs[0]:
                 st.image(result_img_path, caption="Reference Map", use_container_width=True)
 
 # --- TAB 2: GRID CALCULATION ---
-with tabs[1]:
+if page == "Grid Calc":
     st.markdown('<div class="header-style">📐 Calculate 3D Distance (Grid)</div>', unsafe_allow_html=True)
     st.info("Input: Meters (Indian Grid System)")
     
@@ -493,7 +503,7 @@ with tabs[1]:
             st.error(f"Error: {e}")
 
 # --- TAB 3: DD TO DMS ---
-with tabs[2]:
+if page == "DD to DMS":
     st.markdown('<div class="header-style">🔄 Decimal Degrees to DMS</div>', unsafe_allow_html=True)
     dd_lat = st.text_input("Latitude (DD)", "30.3165")
     dd_lon = st.text_input("Longitude (DD)", "78.0322")
@@ -513,7 +523,7 @@ with tabs[2]:
             st.error(e)
 
 # --- TAB 4: DMS TO DD ---
-with tabs[3]:
+if page == "DMS to DD":
     st.markdown('<div class="header-style">↩️ DMS to Decimal Degrees</div>', unsafe_allow_html=True)
     st.info("Format: D°M'S\"H (e.g., 30°18'59.4\"N)")
     dms_in_lat = st.text_input("Latitude (DMS)", "30°18'59.4\"N")
@@ -536,7 +546,7 @@ with tabs[3]:
             st.error(f"Format Error: {ve}")
 
 # --- TAB 5: LAT/LON TO GRID ---
-with tabs[4]:
+if page == "Lat/Lon to Grid":
     st.markdown('<div class="header-style">🔄 WGS84 Lat/Lon to Indian Grid</div>', unsafe_allow_html=True)
     forward_system = st.selectbox("Target grid system", ["Kalianpur 1975", DSM_SYSTEM], key="forward_grid_system")
     if forward_system == DSM_SYSTEM:
@@ -580,7 +590,7 @@ with tabs[4]:
             st.error(f"Conversion Error: {e}")
 
 # --- TAB 6: GRID TO LAT/LON ---
-with tabs[5]:
+if page == "Grid to Lat/Lon":
     st.markdown('<div class="header-style">↩️ Indian Grid to WGS84 Lat/Lon</div>', unsafe_allow_html=True)
     
     grid_zone = st.selectbox(
@@ -618,7 +628,7 @@ with tabs[5]:
             st.error(f"Error: {e}")
 
 # --- DSM CONVERSIONS: SUPPLIED LCC PARAMETERS ON WGS84 ---
-with tabs[6]:
+if page == "ESM to DSM":
     st.markdown('<div class="header-style">🔄 ESM Grid to DSM Grid</div>', unsafe_allow_html=True)
     st.caption(DSM_NOTE)
     esm_source_zone = st.selectbox("Source ESM zone", list(KALIANPUR_ZONE_CATALOG), key="esm_dsm_source")
@@ -634,7 +644,7 @@ with tabs[6]:
         except Exception as exc:
             st.error(f"Conversion Error: {exc}")
 
-with tabs[7]:
+if page == "DSM to Lat/Lon":
     st.markdown('<div class="header-style">↩️ DSM Grid to WGS84 Lat/Lon</div>', unsafe_allow_html=True)
     st.caption(DSM_NOTE)
     st.caption("Enter full metre coordinates. Shortened grid references also require their grid-square identification.")
@@ -650,7 +660,7 @@ with tabs[7]:
         except Exception as exc:
             st.error(f"Conversion Error: {exc}")
 
-with tabs[8]:
+if page == "DSM to ESM":
     st.markdown('<div class="header-style">↩️ DSM Grid to ESM Grid</div>', unsafe_allow_html=True)
     st.caption(DSM_NOTE)
     dsm_esm_zone = st.selectbox("Source DSM zone", list(DSM_ZONE_CATALOG), index=7, key="dsm_esm_source")
@@ -666,7 +676,7 @@ with tabs[8]:
             st.error(f"Conversion Error: {exc}")
 
 # --- TAB 10: TRAVERSE ---
-with tabs[9]:
+if page == "Traverse":
     st.markdown('<div class="header-style">📐 Traverse (Deg & Dist to Coordinate)</div>', unsafe_allow_html=True)
     st.info("Calculate Target Coordinate using Start Point, Bearing & Distance")
     
@@ -715,7 +725,7 @@ with tabs[9]:
             st.error(f"Calculation Error: {e}")
 
 # --- TAB 11: BATCH PROCESSING ---
-with tabs[10]:
+if page == "Batch Process":
     st.markdown('<div class="header-style">📊 Batch Processing (CSV)</div>', unsafe_allow_html=True)
     batch_operation = st.selectbox("Batch conversion", [
         "Kalianpur grid -> WGS84", "DSM grid -> WGS84", "WGS84 -> DSM grid",
@@ -806,13 +816,13 @@ with tabs[10]:
                     st.error(f"Batch Error: {exc}")
 
 # --- TAB 11: OWN POSITION FINDER ---
-with tabs[11]:
+if page == "Own Position":
     st.markdown('<div class="header-style">📍 Own Position Finder</div>', unsafe_allow_html=True)
     position_dsm_zone = dsm_target_selector("position_dsm_zone", "DSM zone for own position")
     render_own_position(lambda lat, lon: show_position_coordinates(lat, lon, position_dsm_zone))
 
 # --- TAB 12: ZONE LIST ---
-with tabs[12]:
+if page == "Zone List":
     st.markdown('<div class="header-style">🗺️ Zone Reference</div>', unsafe_allow_html=True)
     
     z_type = st.radio("Select System", ["Kalianpur 1975", DSM_SYSTEM, "WGS84"])
@@ -835,7 +845,7 @@ with tabs[12]:
             st.write(f"**{k}**: EPSG {v['epsg']}")
 
 # --- TAB 13: ABOUT ---
-with tabs[13]:
+if page == "About":
     st.markdown('<div class="header-style">About</div>', unsafe_allow_html=True)
     
     # Use logo_path logic here as well

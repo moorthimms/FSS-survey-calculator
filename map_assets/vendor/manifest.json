@@ -1,0 +1,30 @@
+{
+  "maplibre-gl.js": {
+    "source": "https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js",
+    "sha256": "b5a34e6930ff937dbbb9eec8892cffb80ba473cce88ae5ca8c4654432f5f0ebc"
+  },
+  "maplibre-gl.css": {
+    "source": "https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css",
+    "sha256": "792ac997dcf6ae6f643eb4e2dee4630c85e7056526bd8fb85ffe83c67d6c41b4"
+  },
+  "geographiclib.js": {
+    "source": "https://unpkg.com/geographiclib-geodesic@2.1.0/geographiclib-geodesic.js",
+    "sha256": "66f2bd5957b7a41259eafe3df12cadcd55bdd5fe6ad0b57b0dc6b9b694c2fc39"
+  },
+  "proj4.js": {
+    "source": "https://unpkg.com/proj4@2.19.10/dist/proj4.js",
+    "sha256": "ae2c4005bd390f89472d0f241bb960c015c1ee5149ca972ba096ff9158f2244e"
+  },
+  "mgrs.js": {
+    "source": "https://unpkg.com/mgrs@2.1.0/dist/mgrs.js",
+    "sha256": "2e6535823059d774f14228ede57d5f931d77b01baf8c70a24daaaf8d24ba915a"
+  },
+  "fflate.js": {
+    "source": "https://unpkg.com/fflate@0.8.2/umd/index.js",
+    "sha256": "c3b34f2e9f5e74d4d7d64e01cac7a0c01954c6c406414d42185c7b53d6875ddf"
+  },
+  "sql-asm.js": {
+    "source": "https://unpkg.com/sql.js@1.13.0/dist/sql-asm.js",
+    "sha256": "c83beac167ae9c1af075449555b1db68b24b5280d0fc65c1f7ac4d1cd103459d"
+  }
+}

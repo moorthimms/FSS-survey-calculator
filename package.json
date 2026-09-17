@@ -1,0 +1,6 @@
+{
+  "name": "fss-map-tests",
+  "private": true,
+  "scripts": {"test": "node --test tests/test_map*.js && node tests/test_browser_scan.js"},
+  "devDependencies": {"jsdom": "26.1.0", "fake-indexeddb": "6.2.4"}
+}

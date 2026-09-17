@@ -9,8 +9,10 @@ A Streamlit web application for surveying and geodetic calculations, including:
 - automatic zone detection
 - CSV batch conversion, including DSM and ESM conversions in both directions
 - browser-based position display and optional local RTK receiver/NTRIP input
+- interactive field mapping, waypoints, routes, property areas, grids and track navigation
+- offline raster MBTiles, HGT terrain, GPX/KML/KMZ/GeoJSON exchange and project backups
 
-All 14 application tabs are retained. The zone catalog and selectors preserve all **9 original Kalianpur entries and 24 original DSM entries**, including their original identifiers. Calculation definitions are tracked separately so a historical identifier cannot silently select an unrelated grid.
+All 14 existing tools are retained as pages under the sidebar **Menu**, alongside the new **Map** page. The zone catalog and selectors preserve all **9 original Kalianpur entries and 24 original DSM entries**, including their original identifiers. Calculation definitions are tracked separately so a historical identifier cannot silently select an unrelated grid.
 
 ## Run locally
 
@@ -22,6 +24,21 @@ streamlit run app.py
 ```
 
 For browser location, serve the application through HTTPS (or use localhost) and grant location permission. Browser/device location is informational and is not a substitute for survey-grade GNSS equipment.
+
+## Map and menu
+
+Open **Menu → Map** for the field workspace. Its tool menu contains **Mark & measure**, **Landmarks & files**, **GPS & navigation**, **Maps & offline areas**, **Elevation & terrain**, and **Display & field help**. Existing calculations remain in the main sidebar menu; only the selected page renders.
+
+Map tools include center-crosshair marking, editable routes and areas, ellipsoidal measurements, DD/DMS/UTM/MGRS/DSM readouts and grids, local landmark storage, GPS tracks with gap handling, destination/path guidance, dual-axis track profiles, offline raster MBTiles, HGT relief/hillshade/slope, optional online terrain, import/export and a downloadable standalone HTML workspace. See the [complete feature coverage and field guide](docs/map-workspace.md).
+
+Location and map data are stored in the user's browser. Online tile providers receive requests for the viewed map area. GPS starts only on request; native A-GPS reset, device calibration and background recording cannot be supplied by this browser app. Map rendering needs WebGL. Keep exported backups and the original offline files.
+
+Map regression tests (Node is required only for development):
+
+```bash
+npm ci
+npm test
+```
 
 ## Own Position and RTK
 

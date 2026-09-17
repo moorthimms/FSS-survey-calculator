@@ -29,10 +29,18 @@ Own Position offers two sources:
 
 | Source | What it provides | Where it runs |
 | --- | --- | --- |
-| Phone / browser | A fresh location snapshot and browser-reported accuracy; a 15-second scan requests high accuracy without promising a distance threshold | Hosted app over HTTPS, or localhost |
+| Phone / browser | A fresh location snapshot, automatic height when reported, and separate horizontal/vertical accuracy; a scan takes up to 15 seconds | Hosted app over HTTPS, or localhost |
 | External RTK receiver | Live NMEA position, FIX/FLOAT state, satellite count, HDOP, correction age, same-epoch GST uncertainty, optional NTRIP forwarding and point logging | App running on the computer physically connected to the receiver's USB or Bluetooth serial port |
 
 **The hosted Streamlit server cannot read a Bluetooth receiver attached to a visitor's phone or computer.** This integration uses a local USB/serial or Bluetooth Classic COM connection, not a browser Bluetooth API. Direct Android/iPhone BLE or proprietary receiver integration requires the actual receiver model and protocol; it is not implemented by this change. Browser location never gets relabelled RTK from a small accuracy number.
+
+### Automatic height
+
+**Own Position → Get Own Position** now displays the device's altitude automatically, with its reported vertical accuracy when available. The scan waits up to 15 seconds if an early horizontal fix lacks height and prefers a complete latitude/longitude/height sample. Those values always come from the same timestamp. If altitude remains unavailable, horizontal positioning still works and the height panel says **unavailable**; no zero or terrain elevation is substituted. Zero and negative heights remain valid measurements.
+
+Browser height is labelled **WGS84 ellipsoidal height**, following the [Geolocation altitude definition](https://www.w3.org/TR/geolocation/#altitude-and-altitudeaccuracy-attributes). It is not automatically sea-level or ground elevation; those require a geoid model and any relevant device-height offset. Non-finite height values and invalid vertical accuracy are treated as unreported.
+
+Live receiver mode displays **MSL height**, **ellipsoidal height**, and **GST vertical uncertainty (1σ)** as separate metrics for each fresh fix. Ellipsoidal height uses the receiver's MSL height plus its reported geoid separation; a missing component remains unreported. The existing RTK point CSV retains these height fields and vertical uncertainty. Stale receiver heights are not shown as current. Horizontal logging acceptance does not certify vertical accuracy, and no pole-height or vertical-datum correction is applied.
 
 ### Local receiver setup (Windows)
 

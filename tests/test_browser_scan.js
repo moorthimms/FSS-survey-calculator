@@ -24,8 +24,8 @@ function harness(supported = true) {
         clearTimeout(id) { timers.delete(id); }
     });
     return {result, timers, cleared,
-        emit(accuracy, timestamp = 100000) {
-            position({coords: {latitude: 30, longitude: 78, accuracy}, timestamp});
+        emit(accuracy, timestamp = 100000, altitude = 120, altitudeAccuracy = 3) {
+            position({coords: {latitude: 30, longitude: 78, accuracy, altitude, altitudeAccuracy}, timestamp});
         }, fail(code) { failure({code, message: 'denied'}); },
         timeout() { for (const fn of [...timers.values()]) fn(); }
     };
@@ -56,5 +56,47 @@ function harness(supported = true) {
     h = harness(false);
     assert.equal((await h.result).error.code, 2);
     assert.equal(h.timers.size, 0);
-    console.log('5 browser scan checks passed.');
+
+    h = harness();
+    h.emit(0.5, 100000, null, null);
+    assert.equal(h.timers.size, 1); // Do not stop before altitude becomes available.
+    h.emit(0.8, 100100, 55, 2);
+    let result = await h.result;
+    assert.equal(result.coords.altitude, 55);
+    assert.equal(result.coords.altitudeAccuracy, 2);
+    assert.equal(result.timestamp, 100100);
+
+    h = harness();
+    h.emit(2, 100000, null, null);
+    h.emit(8, 100100, 80, 4);
+    h.emit(3, 100200, null, null);
+    h.timeout();
+    result = await h.result;
+    assert.equal(result.coords.altitude, 80);
+    assert.equal(result.coords.accuracy, 8);
+    assert.equal(result.timestamp, 100100); // Keep a complete sample, never mix epochs.
+
+    h = harness();
+    h.emit(0.4, 100000, null, null);
+    h.timeout();
+    result = await h.result;
+    assert.equal(result.coords.altitude, null);
+    assert.equal(result.coords.altitudeAccuracy, null);
+    assert.equal(result.coords.accuracy, 0.4);
+
+    for (const height of [0, -12.5]) {
+        h = harness();
+        h.emit(0.9, 100000, height, 0);
+        result = await h.result;
+        assert.equal(result.coords.altitude, height);
+        assert.equal(result.coords.altitudeAccuracy, 0);
+    }
+
+    h = harness();
+    h.emit(0.9, 100000, Infinity, NaN);
+    h.timeout();
+    result = await h.result;
+    assert.equal(result.coords.altitude, null);
+    assert.equal(result.coords.altitudeAccuracy, null);
+    console.log('11 browser scan scenarios passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

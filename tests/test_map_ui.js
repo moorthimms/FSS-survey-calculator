@@ -110,8 +110,12 @@ async function setup(storage = new IDBFactory()) {
     setTerrain(t) {
       this.terrain = t;
     }
-    setPitch() {}
-    setBearing() {}
+    setPitch(v) {
+      this.pitch = v;
+    }
+    setBearing(v) {
+      this.bearing = v;
+    }
     queryTerrainElevation() {
       return null;
     }
@@ -417,5 +421,137 @@ test("landmarks and paused recorder recover from device storage", async () => {
     assert.equal(second.map.sources.recording.data.features.length, 0);
   } finally {
     second.close();
+  }
+});
+
+test("GIS toolbar, default grid readouts, cursor coordinates and corner controls", async () => {
+  const t = await setup();
+  try {
+    assert.match(t.$("coord-dsm").textContent, /DSM 6D/);
+    assert.match(t.$("coord-wgs").textContent, /WGS84.*MGRS/);
+    assert.equal(t.$("coordinates").hidden, false);
+    t.map.events.mousemove.forEach((fn) =>
+      fn({ lngLat: { lng: 80, lat: 27 } }),
+    );
+    assert.match(t.$("coordinate-context").textContent, /Cursor/);
+    assert.match(t.$("coord-primary").textContent, /27.0000000/);
+    assert.match(t.$("coord-dsm").textContent, /DSM 6E/);
+    t.map.events.mouseout.forEach((fn) => fn());
+    assert.match(t.$("coordinate-context").textContent, /Map center/);
+    await t.click("tool-line");
+    assert.equal(t.$("draw-mode").value, "LineString");
+    await t.click("corner-layers");
+    assert.equal(t.$("panel-layers").hidden, false);
+    await t.change("basemap", "satellite");
+    assert.match(t.map.sources.basemap.tiles[0], /World_Imagery/);
+    await t.change("basemap", "topographic");
+    assert.match(t.map.sources.basemap.tiles[0], /World_Topo_Map/);
+    t.$("orientation").value = "gps";
+    t.$("perspective").checked = true;
+    await t.click("corner-north");
+    assert.equal(t.$("orientation").value, "north");
+    assert.equal(t.$("perspective").checked, false);
+    assert.equal(t.map.bearing, 0);
+    assert.equal(t.map.pitch, 0);
+  } finally {
+    t.close();
+  }
+});
+
+test("own position rejects inaccurate readings and jumps, preserving height and uncertainty", async () => {
+  const t = await setup();
+  try {
+    await t.click("corner-own");
+    const base = Date.now() - 5000;
+    const emit = (longitude, accuracy, altitude, time) =>
+      t.position({
+        timestamp: time,
+        coords: {
+          longitude,
+          latitude: 30,
+          accuracy,
+          altitude,
+          altitudeAccuracy: 7,
+          speed: 0,
+          heading: null,
+        },
+      });
+    emit(78, 100, 900, base);
+    await t.click("mark-own");
+    assert.equal(t.map.sources.landmarks.data.features.length, 0);
+    emit(78, 3, 0, base + 1000);
+    assert.match(t.$("own-summary").textContent, /Height: 0.0 m/);
+    emit(85, 3, 999, base + 2000);
+    assert.match(t.$("message").textContent, /rejected/);
+    assert.match(t.$("own-summary").textContent, /Height: 0.0 m/);
+    emit(78.00001, 2, -5, base + 3000);
+    await t.click("mark-own");
+    const saved = t.map.sources.landmarks.data.features[0];
+    assert.equal(saved.geometry.coordinates[2], -5);
+    assert.equal(saved.properties.samples[0].accuracy, 2);
+    assert.equal(saved.properties.samples[0].verticalAccuracy, 7);
+    await t.click("gps-stop");
+    assert.match(t.$("own-summary").textContent, /stale/);
+  } finally {
+    t.close();
+  }
+});
+
+test("map inverse auto lists competing DSM zones without moving to an arbitrary one", async () => {
+  const t = await setup();
+  try {
+    const center = [...t.map.center];
+    await t.change("entry-format", "DSM Auto");
+    t.$("entry-coord").value = "500000,500000";
+    await t.click("go-coordinate");
+    assert.match(t.$("entry-candidates").textContent, /5C:/);
+    assert.match(t.$("entry-candidates").textContent, /8H:/);
+    assert.match(t.$("message").textContent, /ambiguous/);
+    assert.deepEqual([...t.map.center], center);
+  } finally {
+    t.close();
+  }
+});
+
+test("cursor elevation loads on demand, caches raw height and does not redraw geometry on idle", async () => {
+  const t = await setup();
+  try {
+    let requests = 0;
+    t.w.fetch = async () => {
+      requests++;
+      return { ok: true, arrayBuffer: async () => new ArrayBuffer(4) };
+    };
+    t.w.createImageBitmap = async () => ({
+      width: 256,
+      height: 256,
+      close() {},
+    });
+    const rgba = new Uint8ClampedArray(256 * 256 * 4);
+    for (let i = 0; i < rgba.length; i += 4) rgba.set([128, 120, 0, 255], i);
+    t.w.HTMLCanvasElement.prototype.getContext = () => ({
+      drawImage() {},
+      getImageData() {
+        return { width: 256, height: 256, data: rgba };
+      },
+    });
+    t.map.events.mousemove.forEach((fn) =>
+      fn({ lngLat: { lng: 78, lat: 30 } }),
+    );
+    await waitFor(() => t.$("center-height").textContent.includes("120.0 m"));
+    assert.equal(requests, 1);
+    t.map.events.mousemove.forEach((fn) =>
+      fn({ lngLat: { lng: 78.00001, lat: 30 } }),
+    );
+    await delay(300);
+    assert.equal(requests, 1);
+    let updates = 0;
+    t.map.sources.preview.setData = () => updates++;
+    t.map.events.idle.forEach((fn) => fn());
+    assert.equal(updates, 0);
+    t.$("cursor-elevation").checked = false;
+    t.$("cursor-elevation").dispatchEvent(new t.w.Event("change"));
+    assert.match(t.$("center-height").textContent, /unavailable/);
+  } finally {
+    t.close();
   }
 });

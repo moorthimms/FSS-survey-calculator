@@ -292,3 +292,39 @@ def kalianpur_to_dsm(easting, northing, source_zone, target_zone=None):
 def dsm_to_kalianpur(easting, northing, source_zone):
     lon, lat = dsm_to_wgs84(easting, northing, source_zone)
     return wgs84_to_kalianpur(lat, lon)
+
+
+AUTO_SOURCE_ZONE = "Auto (source candidates)"
+
+
+def inverse_zone_candidates(system, easting, northing):
+    """Return every compatible verified zone, never infer a zone from grid size."""
+    easting, northing = _finite_pair(easting, northing)
+    if system not in ("DSM", "Kalianpur 1975"):
+        raise ValueError(f"Unknown grid system: {system}")
+    zones = DSM_ZONES if system == "DSM" else KALIANPUR_EPSG
+    result = []
+    for zone in zones:
+        try:
+            if system == "DSM":
+                lon, lat = dsm_to_wgs84(easting, northing, zone)
+                if zone not in dsm_zone_candidates(lat, lon):
+                    continue
+            else:
+                lon, lat = kalianpur_to_wgs84(easting, northing, zone)
+            result.append({"zone": zone, "latitude": lat, "longitude": lon})
+        except (ValueError, ProjError):
+            continue
+    return result
+
+
+def resolve_source_zone(system, easting, northing, zone):
+    if zone != AUTO_SOURCE_ZONE:
+        return zone
+    candidates = inverse_zone_candidates(system, easting, northing)
+    if len(candidates) == 1:
+        return candidates[0]["zone"]
+    if not candidates:
+        raise ValueError("No supported source zone matches these coordinates. Confirm the source CRS and full metre coordinates.")
+    raise ValueError("Ambiguous source zone: " + ", ".join(c["zone"] for c in candidates)
+                     + ". Select the zone printed on your map sheet; grid numbers alone do not identify it.")

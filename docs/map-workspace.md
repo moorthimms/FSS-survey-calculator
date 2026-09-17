@@ -2,15 +2,31 @@
 
 The feature discussions in `alpine.txt` are implemented as a browser mapping workspace under **Menu → Map**. All fourteen existing calculator, conversion, positioning and reference pages remain in the sidebar menu, giving fifteen pages in total. The original 33 zone identifiers and all existing conversion definitions are unchanged.
 
+## GIS layout and live references
+
+A compact toolbar opens the docked tools panel. Pan, Point, Distance and Area select drawing modes; Landmarks, Layers, GPS, Terrain and Display open their controls. The map corner offers Locate me, North up and Maps. North up resets true-north rotation and tilt without needing a device compass. All original pages remain in the main menu.
+
+The default lower readout follows the desktop cursor, returning to the map center on pointer exit or pan. It includes primary/secondary coordinates, WGS84 MGRS, DSM and Kalianpur easting/northing with suggested zones, and ground elevation. Shared bands/overlapping EPSG bounding boxes show multiple suggestions. These suggestions do not identify the source map sheet. Choose an explicit zone in the coordinate format selector when required; all historical identifiers remain in Zone List.
+
+The browser Kalianpur definitions are exported from the same installed EPSG CRS and verified geocentric translation used by Python. Tests compare forward and inverse results against PROJ at 15 locations across all five supported zones, within 1 mm numerically. This agreement is not positioning accuracy: the datum operation reports 22 m accuracy. Missing zone definitions still request source parameters.
+
+Cursor terrain height is enabled by default, using debounced online Terrarium tile requests with a bounded cache and failure retry delay. The Terrain checkbox disables those requests; selecting imported HGT gives local data priority. Ground elevation uses the DEM source's vertical reference and resolution. It is separate from the GPS antenna's WGS84 ellipsoid height; missing DEM/device height remains unavailable. Online terrain services receive the viewed area, and outages or missing tiles cannot produce a measured height. No vertical datum conversion is inferred.
+
+Street (OSM), satellite (Esri World Imagery), topographic (Esri World Topo), blank, custom XYZ, imported raster MBTiles and downloaded-area maps are selectable. Attribution is displayed; provider availability and detail vary. Built-in street/satellite/topographic sources are for live viewing; bulk download remains limited to explicitly permitted custom providers.
+
+Every source-grid converter, including both DSM/ESM directions and batch processing, offers Auto (source candidates). Compatible inverse locations are listed for single conversions. Batch ambiguous rows receive candidate-zone errors without invented latitude/longitude. Existing explicit defaults are retained. DSM false-origin coordinates 500000,500000 match all 18 supplied zones, so a source zone must be selected. Map coordinate entry has equivalent Auto candidate behavior. Forward conversion continues to suggest zones from latitude/longitude.
+
+Locate me starts a high-accuracy browser watch after permission. The map, own-point capture and track recorder use the selected maximum accuracy radius and reject implausible jumps. The corner shows accepted-fix age, horizontal uncertainty, height and vertical uncertainty; fixes expire after 15 seconds. Heights are retained from the same accepted fix. Filtering cannot improve the receiver's physical accuracy or produce RTK FIX; use the existing external receiver workflow for RTK.
+
 ## Feature coverage
 
 | Requested feature | Location and behavior |
 | --- | --- |
 | Mark a location using the center target | Mark & measure → Waypoint → Add center point; map clicks also add a point |
 | Name, color and symbol | Waypoint/route/area creation and the landmark editor |
-| Screen-center coordinates | Live primary and secondary coordinate readouts as the map moves |
-| DD, DMS and metric coordinate formats | Display settings: DD, DMS, UTM, MGRS and the existing DSM catalog; unsupported DSM entries retain their labels and explain which source parameters are missing |
-| Go to supplied coordinates | DD latitude/longitude, UTM easting/northing with hemisphere and zone, MGRS, or DSM easting/northing |
+| Cursor and map-center coordinates | Default WGS84 DD/UTM/MGRS and suggested DSM/Kalianpur coordinates; cursor movement on desktop, center position while panning or using touch |
+| DD, DMS and metric coordinate formats | Display settings: DD, DMS, UTM, MGRS and the existing DSM and Kalianpur catalogs; unsupported entries retain their labels and explain which source parameters are missing |
+| Go to supplied coordinates | DD latitude/longitude, UTM easting/northing with hemisphere and zone, MGRS, or DSM/Kalianpur easting/northing with explicit zone or Auto candidates |
 | Two-point and multi-leg measurement | Route / distance; live preview leg distance and true bearing; saved total length |
 | Property area and perimeter | Area / property; WGS84 ellipsoidal area and perimeter; undo and draggable vertices; crossed boundaries are rejected |
 | Acres, hectares and imperial units | Display settings; metres/kilometres or feet/miles, square metres, hectares, acres or square feet |
@@ -85,3 +101,6 @@ The DOM tests validate application state, tool handlers and persistence without 
 - [W3C Geolocation](https://www.w3.org/TR/geolocation/)
 - [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
 - [AWS terrain data](https://registry.opendata.aws/terrain-tiles/) and [terrain attribution](https://github.com/tilezen/joerd/blob/master/docs/attribution.md)
+
+- [PROJ Lambert conformal conic parameters](https://proj.org/en/stable/operations/projections/lcc.html)
+- [Esri World Imagery service](https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer) and [World Topo service](https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer)

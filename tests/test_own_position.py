@@ -94,6 +94,58 @@ class OwnPositionAppTests(unittest.TestCase):
         self.assertFalse(self.app.metric)
         self.assertTrue(any("stale" in x.value for x in self.app.warning))
 
+    def browser_height(self, height, accuracy):
+        location = {"coords": {"latitude": 30.3165, "longitude": 78.0322,
+                               "accuracy": 2.0, "altitude": height, "altitudeAccuracy": accuracy},
+                    "timestamp": time.time() * 1000}
+        with patch("streamlit_js_eval.streamlit_js_eval", return_value=location):
+            self.app.checkbox("get_pos_checkbox").check().run()
+        self.assertFalse(self.app.exception)
+
+    def test_browser_automatically_displays_height_and_vertical_accuracy(self):
+        self.browser_height(123.45, 2.5)
+        self.assertEqual(labeled(self.app.metric, "Height (WGS84 ellipsoid)").value, "123.45 m")
+        self.assertEqual(labeled(self.app.metric, "Vertical accuracy (browser)").value, "2.50 m")
+        self.assertEqual(len(self.app.tabs), 14)
+        self.assertTrue(any("Sea-level elevation needs a geoid correction" in x.value for x in self.app.caption))
+
+    def test_zero_negative_height_and_missing_accuracy(self):
+        for height, accuracy in [(0, 0), (-12.5, None), (20, -1)]:
+            with self.subTest(height=height, accuracy=accuracy):
+                self.browser_height(height, accuracy)
+                self.assertEqual(labeled(self.app.metric, "Height (WGS84 ellipsoid)").value, f"{height:.2f} m")
+                expected = "0.00 m" if accuracy == 0 else "Unreported"
+                self.assertEqual(labeled(self.app.metric, "Vertical accuracy (browser)").value, expected)
+
+    def test_missing_or_invalid_height_preserves_horizontal_position(self):
+        for height in [None, float("nan"), float("inf"), "bad", True]:
+            with self.subTest(height=height):
+                self.browser_height(height, 2)
+                self.assertTrue(any("Height unavailable" in x.value for x in self.app.info))
+                self.assertFalse(any(x.label == "Height (WGS84 ellipsoid)" for x in self.app.metric))
+                self.assertTrue(any(x.label == "Latitude (DD)" for x in self.app.metric))
+
+    @patch.dict(os.environ, {"FSS_ENABLE_LOCAL_GNSS": "1"})
+    def test_receiver_automatically_displays_both_heights_and_vertical_uncertainty(self):
+        receiver = FakeReceiver()
+        self.external(receiver)
+        self.assertEqual(labeled(self.app.metric, "Height (MSL, receiver)").value, "100.000 m")
+        self.assertEqual(labeled(self.app.metric, "Height (ellipsoid, receiver)").value, "70.000 m")
+        self.assertEqual(labeled(self.app.metric, "Vertical uncertainty (GST, 1σ)").value, "0.025 m")
+        receiver.state["fix"].update(altitude_msl_m=0.0, altitude_ellipsoid_m=None, geoid_separation_m=None, height_sigma_m=None)
+        self.app.run()
+        self.assertEqual(labeled(self.app.metric, "Height (MSL, receiver)").value, "0.000 m")
+        self.assertEqual(labeled(self.app.metric, "Height (ellipsoid, receiver)").value, "Unreported")
+        self.assertEqual(labeled(self.app.metric, "Vertical uncertainty (GST, 1σ)").value, "Unreported")
+
+    @patch.dict(os.environ, {"FSS_ENABLE_LOCAL_GNSS": "1"})
+    def test_stale_receiver_height_is_not_displayed_as_current(self):
+        receiver = FakeReceiver()
+        self.external(receiver)
+        receiver.state["fix"]["fresh"] = False
+        self.app.run()
+        self.assertFalse(any(x.label.startswith("Height (") for x in self.app.metric))
+
     @patch.dict(os.environ, {"FSS_ENABLE_LOCAL_GNSS": "1"})
     def test_fixed_position_requires_datum_confirmation_then_logs_quality(self):
         receiver = FakeReceiver()
@@ -112,6 +164,10 @@ class OwnPositionAppTests(unittest.TestCase):
         self.assertEqual(row["correction_age_s"], 1.0)
         self.assertEqual(row["horizontal_sigma_rss_m"], 0.014)
         self.assertAlmostEqual(row["latitude"], 30.3165)
+        self.assertEqual(row["altitude_msl_m"], 100.0)
+        self.assertEqual(row["altitude_ellipsoid_m"], 70.0)
+        self.assertEqual(row["geoid_separation_m"], -30.0)
+        self.assertEqual(row["height_sigma_m"], 0.025)
 
     @patch.dict(os.environ, {"FSS_ENABLE_LOCAL_GNSS": "1"})
     def test_float_stale_and_missing_uncertainty_disable_logging(self):

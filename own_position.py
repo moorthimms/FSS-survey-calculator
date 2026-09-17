@@ -24,6 +24,48 @@ def reported(value, unit=""):
     return "unreported" if value is None else f"{value}{unit}"
 
 
+def optional_height_number(value, nonnegative=False):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        number = float(value)
+    except OverflowError:
+        return None
+    return number if math.isfinite(number) and (not nonnegative or number >= 0) else None
+
+
+def show_browser_height(location):
+    coords = location["coords"]
+    height = optional_height_number(coords.get("altitude"))
+    accuracy = optional_height_number(coords.get("altitudeAccuracy"), nonnegative=True)
+    st.subheader("Automatic height")
+    if height is None:
+        st.info("Height unavailable: this device/browser did not report a valid altitude.")
+        return
+    h, a = st.columns(2)
+    h.metric("Height (WGS84 ellipsoid)", f"{height:.2f} m")
+    a.metric("Vertical accuracy (browser)", f"{accuracy:.2f} m" if accuracy is not None else "Unreported")
+    st.caption("Device-reported height for this position and timestamp, relative to the WGS84 ellipsoid. Sea-level elevation needs a geoid correction. No device-height offset is applied.")
+    st.code(f"Ellipsoidal height: {height:.3f} m", language="text")
+
+
+def show_receiver_height(fix):
+    msl = optional_height_number(fix.get("altitude_msl_m"))
+    ellipsoid = optional_height_number(fix.get("altitude_ellipsoid_m"))
+    separation = optional_height_number(fix.get("geoid_separation_m"))
+    uncertainty = optional_height_number(fix.get("height_sigma_m"), nonnegative=True)
+    st.subheader("Automatic height")
+    if msl is None and ellipsoid is None:
+        st.info("Height unavailable: the current receiver fix did not report a valid altitude.")
+        return
+    h1, h2, h3 = st.columns(3)
+    h1.metric("Height (MSL, receiver)", f"{msl:.3f} m" if msl is not None else "Unreported")
+    h2.metric("Height (ellipsoid, receiver)", f"{ellipsoid:.3f} m" if ellipsoid is not None else "Unreported")
+    h3.metric("Vertical uncertainty (GST, 1σ)", f"{uncertainty:.3f} m" if uncertainty is not None else "Unreported")
+    st.caption(f"Receiver geoid separation: {reported(separation, ' m')}. Ellipsoidal height = receiver MSL height + geoid separation. Heights refer to the antenna; no pole-height or vertical-datum correction is applied.")
+    st.caption("Height uncertainty is reported separately from the horizontal limits used for point logging. Available height fields are retained in RTK CSV exports.")
+
+
 BROWSER_SCAN = """
 new Promise((resolve) => {
     let best = null, watchId = null, timer = null, done = false;
@@ -46,11 +88,18 @@ new Promise((resolve) => {
             if (![c.latitude, c.longitude, c.accuracy, pos.timestamp].every(Number.isFinite)
                 || c.accuracy < 0 || Math.abs(c.latitude) > 90 || Math.abs(c.longitude) > 180
                 || Math.abs(Date.now() - pos.timestamp) > 30000) return;
+            const hasHeight = Number.isFinite(c.altitude);
             const value = {coords: {latitude: c.latitude, longitude: c.longitude,
-                accuracy: c.accuracy, altitude: c.altitude, altitudeAccuracy: c.altitudeAccuracy},
+                accuracy: c.accuracy, altitude: hasHeight ? c.altitude : null,
+                altitudeAccuracy: hasHeight && Number.isFinite(c.altitudeAccuracy) && c.altitudeAccuracy >= 0
+                    ? c.altitudeAccuracy : null},
                 timestamp: pos.timestamp};
-            if (!best || c.accuracy < best.coords.accuracy) best = value;
-            if (c.accuracy <= 1) finish(best);
+            // Prefer a complete 3D sample. Keep its coordinates and height together.
+            const bestHasHeight = best && Number.isFinite(best.coords.altitude);
+            if (!best || (hasHeight && !bestHasHeight)
+                || (hasHeight === bestHasHeight && c.accuracy < best.coords.accuracy)) best = value;
+            // Continue the bounded scan when an early horizontal fix lacks altitude.
+            if (c.accuracy <= 1 && hasHeight) finish(best);
         }, (err) => {
             if (err.code === 1) finish(error(err.code, err.message));
         }, {enableHighAccuracy: true, maximumAge: 0, timeout: 15000});
@@ -78,7 +127,7 @@ def browser_coordinates(location, now=None):
 
 
 def render_browser(display_coordinates):
-    st.caption("Requests the best available browser location for up to 15 seconds. Metre or centimetre accuracy is not guaranteed; this does not apply RTK corrections.")
+    st.caption("Requests browser location and height for up to 15 seconds, preferring a complete 3D sample when available. Metre or centimetre accuracy is not guaranteed; this does not apply RTK corrections.")
     if not st.checkbox("Get Own Position", key="get_pos_checkbox"):
         return
     if st.button("Refresh position", key="refresh_browser_position"):
@@ -99,6 +148,7 @@ def render_browser(display_coordinates):
     st.success(f"Location acquired. Browser-reported horizontal accuracy: {accuracy:.2f} m.")
     st.caption("Browser accuracy is an estimated radius, not an RTK FIX or a measurement of field error. Refresh after moving.")
     st.caption(f"Position time (UTC): {datetime.fromtimestamp(stamp, timezone.utc).isoformat()}")
+    show_browser_height(location)
     display_coordinates(lat, lon)
 
 
@@ -188,7 +238,7 @@ def render_external(display_coordinates):
             display_coordinates(fix["latitude"], fix["longitude"])
         else:
             st.write(f"Receiver latitude/longitude: {fix['latitude']:.9f}, {fix['longitude']:.9f}")
-        st.caption(f"Antenna heights: MSL {reported(fix['altitude_msl_m'], ' m')}; geoid separation {reported(fix['geoid_separation_m'], ' m')}; ellipsoidal {reported(fix['altitude_ellipsoid_m'], ' m')}. No pole-height or vertical-datum correction is applied.")
+        show_receiver_height(fix)
     point_name = st.text_input("Point name", key="rtk_point_name")
     points = st.session_state.setdefault("rtk_points", [])
     if st.button("Log RTK point", disabled=bool(issues) or len(points) >= 10000):

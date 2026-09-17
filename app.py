@@ -32,7 +32,36 @@ except ImportError:
     st.error("⚠️ Library 'streamlit-js-eval' is missing. Please run: `pip install streamlit-js-eval`")
     st.stop()
 
+# Check the dependency itself separately from our application module.
 try:
+    from pyproj import CRS, Transformer
+except ModuleNotFoundError as exc:
+    if exc.name == "pyproj":
+        st.error("The Python environment running this app does not have pyproj installed.")
+    else:
+        st.error("A dependency needed by pyproj is missing.")
+    st.code(str(exc), language="text")
+    st.info("Local install: run `python -m pip install -r requirements.txt`, then start with "
+            "`python -m streamlit run app.py` using the same Python environment. "
+            "On Streamlit Community Cloud, reboot the app and check the dependency installation logs.")
+    st.stop()
+except (ImportError, OSError) as exc:
+    st.error("pyproj is installed but could not load its Python/native components.")
+    st.code(str(exc), language="text")
+    st.info("Reinstall pyproj in the app's Python environment and restart. "
+            "On Streamlit Community Cloud, check the deployment logs and rebuild the environment.")
+    st.stop()
+
+try:
+    from startup import load_geodesy
+    load_geodesy((
+        'DSM_TABLE', 'DSM_ZONES', 'DSM_ZONE_CATALOG', 'ENHANCED_KALIANPUR_ZONES',
+        'KALIANPUR_ZONE_CATALOG', 'ORIGINAL_ZONE_CATALOG', 'AUTO_SOURCE_ZONE', 'inverse_zone_candidates',
+        'resolve_source_zone', 'detect_dsm_zone', 'dsm_to_kalianpur', 'dsm_to_wgs84',
+        'dsm_zone_candidates', 'detect_kalianpur_zone', 'kalianpur_to_dsm', 'kalianpur_to_wgs84',
+        'kalianpur_transformer', 'wgs84_to_dsm', 'wgs84_to_kalianpur', 'zone_definition_issue',
+        'zone_reference_rows',
+    ))
     from geodesy import (
         DSM_TABLE, DSM_ZONES, DSM_ZONE_CATALOG, ENHANCED_KALIANPUR_ZONES,
         KALIANPUR_ZONE_CATALOG, ORIGINAL_ZONE_CATALOG,
@@ -42,8 +71,11 @@ try:
         kalianpur_transformer, wgs84_to_dsm, wgs84_to_kalianpur,
         zone_definition_issue, zone_reference_rows,
     )
-except ImportError:
-    st.error("⚠️ Library 'pyproj' is missing. Please run: `pip install pyproj`")
+except (ImportError, OSError) as exc:
+    st.error("The geodesy module could not load. This is not a missing-pyproj diagnosis.")
+    st.code(str(exc), language="text")
+    st.info("Deploy all files from the same repository version, including geodesy.py and data/, "
+            "then restart the app. On Streamlit Community Cloud use Manage app → Reboot app.")
     st.stop()
 
 from own_position import gnss_dms, render_own_position

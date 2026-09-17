@@ -203,3 +203,17 @@ python -m unittest discover -s tests -v
 The tests cover preservation of all 33 original zone identifiers, complete selectors and reference views, separation of historical identifiers from conversion definitions, all five verified Kalianpur zones, the 18 DSM image rows, origin and scale checks, an independent LCC formula, forward/inverse and ESM/DSM chains, missing definitions and non-finite values, Streamlit screens, batch exports, and DSM position output. Numerical fixtures and mathematical origin checks are not independently surveyed control points.
 
 Receiver checks also cover GGA/GST checksums and epochs, FIX loss, uncertainty and correction-age limits, NTRIP authentication failures, chunked RTCM forwarding, outbound GGA, disconnected hardware and resource cleanup. Pseudo-terminal integration tests run on POSIX; they are skipped on Windows. Browser watch/timer cleanup and scan selection can additionally be checked with `node tests/test_browser_scan.js` (Node is a test-only tool, not an application dependency).
+
+## Startup: pyproj or geodesy import error
+
+Install dependencies into the same Python environment that runs Streamlit:
+
+```bash
+python -m pip install -r requirements.txt
+python -c "import pyproj; import geodesy; print(pyproj.__version__)"
+python -m streamlit run app.py
+```
+
+On Streamlit Community Cloud, deploy the complete repository with `requirements.txt` at its root, then use **Manage app → Reboot app**. Check installation logs if pyproj still cannot load. Updating only `app.py` can leave `geodesy.py` or `data/` out of sync.
+
+Startup now distinguishes a genuinely absent pyproj package, native-library import failures, and application-module failures, preserving the underlying error. If Streamlit retains an older geodesy module that lacks a newly required export, startup reloads it from disk once. It never installs packages at runtime or substitutes another projection engine.

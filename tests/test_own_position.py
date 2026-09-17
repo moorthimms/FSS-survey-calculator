@@ -63,6 +63,7 @@ class PositionValidationTests(unittest.TestCase):
 class OwnPositionAppTests(unittest.TestCase):
     def setUp(self):
         self.app = AppTest.from_file(APP).run(timeout=20)
+        self.app.radio("app_menu").set_value("Own Position").run()
         self.assertFalse(self.app.exception)
 
     def external(self, receiver=None):
@@ -76,15 +77,16 @@ class OwnPositionAppTests(unittest.TestCase):
         with patch.dict(os.environ, {"FSS_ENABLE_LOCAL_GNSS": "0"}), patch("own_position.LiveReceiver") as connect:
             self.external()
             connect.assert_not_called()
-        self.assertEqual(len(self.app.tabs), 14)
+        self.assertEqual(len(self.app.radio("app_menu").options), 15)
         self.assertTrue(any("hosted server" in x.value for x in self.app.info))
 
     def test_browser_error_does_not_stop_other_tabs(self):
         with patch("streamlit_js_eval.streamlit_js_eval", return_value={"error": {"code": 1}}):
             self.app.checkbox("get_pos_checkbox").check().run()
         self.assertFalse(self.app.exception)
-        self.assertEqual(len(self.app.tabs), 14)
+        self.assertEqual(len(self.app.radio("app_menu").options), 15)
         self.assertTrue(any("Could not retrieve location" in x.value for x in self.app.warning))
+        self.app.radio("app_menu").set_value("Zone List").run()
         self.assertTrue(self.app.dataframe)
 
     def test_stale_browser_fix_is_not_converted(self):
@@ -106,7 +108,7 @@ class OwnPositionAppTests(unittest.TestCase):
         self.browser_height(123.45, 2.5)
         self.assertEqual(labeled(self.app.metric, "Height (WGS84 ellipsoid)").value, "123.45 m")
         self.assertEqual(labeled(self.app.metric, "Vertical accuracy (browser)").value, "2.50 m")
-        self.assertEqual(len(self.app.tabs), 14)
+        self.assertEqual(len(self.app.radio("app_menu").options), 15)
         self.assertTrue(any("Sea-level elevation needs a geoid correction" in x.value for x in self.app.caption))
 
     def test_zero_negative_height_and_missing_accuracy(self):

@@ -1,4 +1,5 @@
 import io
+import time
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -108,7 +109,7 @@ class AppGeodesyTests(unittest.TestCase):
         self.assertTrue(all(status.startswith("Error:") for status in results["status"].iloc[1:]))
 
     def test_own_position_outside_coverage_keeps_wgs84_without_grid_output(self):
-        location = {"coords": {"latitude": 0, "longitude": 0, "accuracy": 5}}
+        location = {"timestamp": time.time() * 1000, "coords": {"latitude": 0, "longitude": 0, "accuracy": 5}}
         with patch("streamlit_js_eval.streamlit_js_eval", return_value=location):
             self.app.checkbox("get_pos_checkbox").check().run()
         self.assertEqual(len(self.app.exception), 0)

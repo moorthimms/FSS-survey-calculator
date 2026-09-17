@@ -45,6 +45,8 @@ except ImportError:
     st.error("⚠️ Library 'pyproj' is missing. Please run: `pip install pyproj`")
     st.stop()
 
+from own_position import gnss_dms, render_own_position
+
 # Custom CSS to mimic the Kivy app's style
 st.markdown("""
     <style>
@@ -300,6 +302,52 @@ def show_dsm_reference():
     st.download_button("Download DSM parameter reference", table.to_csv(index=False),
                        "dsm_parameter_reference.csv", "text/csv", key="dsm_reference_download")
     st.caption("At each listed origin, E = 500,000 m and N = 500,000 m. These are mathematical reference points, not independently surveyed controls.")
+
+
+def show_position_coordinates(lat, lon, position_dsm_zone):
+    # 1. Geographic Coordinates
+    st.subheader("1. Geographic Coordinates (WGS84)")
+
+    w_zone, w_epsg = detect_wgs84_zone(lat, lon)
+    if w_zone:
+        st.write(f"**Suggested regional projection:** {w_zone} (EPSG:{w_epsg})")
+    st.caption("Latitude and longitude below use WGS84 (EPSG:4326).")
+
+    c1, c2 = st.columns(2)
+    c1.metric("Latitude (DD)", f"{lat:.9f}")
+    c2.metric("Longitude (DD)", f"{lon:.9f}")
+    st.caption("Copy Coordinates (DD & DMS):")
+    st.code(f"{lat:.9f}, {lon:.9f}", language="text")
+    st.code(f"{gnss_dms(lat, True)}, {gnss_dms(lon, False)}", language="text")
+
+    # 2. ESM (Kalianpur / Indian Grid)
+    st.subheader("2. ESM (Indian Grid)")
+    try:
+        kz, ke, e, n = wgs84_to_kalianpur(lat, lon)
+        st.write(f"**Zone:** {kz} (EPSG:{ke})")
+        show_kalianpur_accuracy(kz)
+        c3, c4 = st.columns(2)
+        c3.metric("Easting", f"{e:.3f}")
+        c4.metric("Northing", f"{n:.3f}")
+        st.code(f"{e:.3f}, {n:.3f}", language="text")
+    except Exception as exc:
+        st.warning(f"Kalianpur conversion unavailable: {exc}")
+
+    # 3. DSM WGS84/LCC grid, using the supplied parameter table.
+    st.subheader("3. DSM Grid (WGS84/LCC)")
+    try:
+        zone, e, n = wgs84_to_dsm(lat, lon, position_dsm_zone)
+        st.write(f"**DSM zone:** {zone}")
+        st.caption(DSM_NOTE)
+        c5, c6 = st.columns(2)
+        c5.metric("DSM Easting", f"{e:.3f}")
+        c6.metric("DSM Northing", f"{n:.3f}")
+        st.code(f"{zone}: E {e:.3f} m, N {n:.3f} m", language="text")
+    except Exception as exc:
+        st.warning(f"DSM conversion unavailable: {exc}")
+
+    # 4. Google Maps Link
+    st.markdown(f"""<a href="https://www.google.com/maps/search/?api=1&query={lat},{lon}" target="_blank"><button style="background-color:#4CAF50; color:white; padding:10px 20px; border:none; border-radius:5px; cursor:pointer;">Open in Google Maps 🗺️</button></a>""", unsafe_allow_html=True)
 
 
 # ==========================================
@@ -760,140 +808,8 @@ with tabs[10]:
 # --- TAB 11: OWN POSITION FINDER ---
 with tabs[11]:
     st.markdown('<div class="header-style">📍 Own Position Finder</div>', unsafe_allow_html=True)
-    st.write("Enable the checkbox below to retrieve your current coordinates.")
     position_dsm_zone = dsm_target_selector("position_dsm_zone", "DSM zone for own position")
-    st.caption("Note: Please allow location access. The system will scan for up to 15 seconds to achieve <1m accuracy.")
-
-    if st.checkbox("Get Own Position", key="get_pos_checkbox"):
-        # We replace the standard geolocation call with a direct call to streamlit_js_eval
-        # to pass the enableHighAccuracy option to the browser's Geolocation API for better accuracy.
-        js_code = """
-            new Promise((resolve, reject) => {
-                const targetAcc = 1.0; // Target accuracy in meters
-                const maxWait = 15000; // Max wait time in ms (15s)
-                let bestPos = null;
-                let watchId = null;
-                
-                const finish = (pos) => {
-                    if (watchId) navigator.geolocation.clearWatch(watchId);
-                    if (pos) {
-                        resolve({
-                            coords: {
-                                latitude: pos.coords.latitude,
-                                longitude: pos.coords.longitude,
-                                altitude: pos.coords.altitude,
-                                accuracy: pos.coords.accuracy,
-                                altitudeAccuracy: pos.coords.altitudeAccuracy,
-                                heading: pos.coords.heading,
-                                speed: pos.coords.speed
-                            },
-                            timestamp: pos.timestamp
-                        });
-                    } else {
-                        resolve({error: {code: 3, message: "Timeout: No position acquired"}});
-                    }
-                };
-
-                const timer = setTimeout(() => finish(bestPos), maxWait);
-
-                watchId = navigator.geolocation.watchPosition(
-                    (pos) => {
-                        if (!bestPos || pos.coords.accuracy < bestPos.coords.accuracy) {
-                            bestPos = pos;
-                        }
-                        if (pos.coords.accuracy <= targetAcc) {
-                            clearTimeout(timer);
-                            finish(pos);
-                        }
-                    },
-                    (err) => {
-                        if (err.code === 1) { // Permission denied
-                            clearTimeout(timer);
-                            if (watchId) navigator.geolocation.clearWatch(watchId);
-                            resolve({error: {code: err.code, message: err.message}});
-                        }
-                    },
-                    { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
-                );
-            })
-        """
-        loc = streamlit_js_eval(
-            js_expressions=js_code,
-            key="get_loc_accurate", # Using a unique key
-            want_output=True,
-            button_text="Get Precise Location (Scanning...)"
-        )
-    else:
-        loc = None
-
-    if loc:
-        if 'coords' in loc:
-            lat = loc['coords']['latitude']
-            lon = loc['coords']['longitude']
-            acc = loc['coords']['accuracy']
-        elif 'error' in loc and loc.get('error'):
-            st.warning(f"Could not retrieve location. Error: {loc['error']['message']} (Code: {loc['error']['code']})")
-            # Stop further execution in this block if location failed
-            st.stop()
-        else:
-            # Handle cases where loc is not None but doesn't have the expected structure
-            st.warning("Received an unexpected location format.")
-            st.stop()
-
-        # Accuracy feedback
-        if acc <= 2:
-            acc_status = "Excellent (High Accuracy)"
-        elif acc <= 10:
-            acc_status = "Good (GPS)"
-        else:
-            acc_status = "Low (Approximate)"
-        
-        st.success(f"Location Acquired. Accuracy: ±{acc:.1f}m ({acc_status})")
-        st.caption("Browser/device location is not a substitute for a calibrated survey-grade GNSS receiver.")
-
-        # 1. Geographic Coordinates
-        st.subheader("1. Geographic Coordinates (WGS84)")
-        
-        w_zone, w_epsg = detect_wgs84_zone(lat, lon)
-        if w_zone:
-            st.write(f"**Suggested regional projection:** {w_zone} (EPSG:{w_epsg})")
-        st.caption("Latitude and longitude below use WGS84 (EPSG:4326).")
-            
-        c1, c2 = st.columns(2)
-        c1.metric("Latitude (DD)", f"{lat:.7f}")
-        c2.metric("Longitude (DD)", f"{lon:.7f}")
-        st.caption("Copy Coordinates (DD & DMS):")
-        st.code(f"{lat:.7f}, {lon:.7f}", language="text")
-        st.code(f"{decimal_to_dms(lat, 'lat')}, {decimal_to_dms(lon, 'lon')}", language="text")
-
-        # 2. ESM (Kalianpur / Indian Grid)
-        st.subheader("2. ESM (Indian Grid)")
-        try:
-            kz, ke, e, n = wgs84_to_kalianpur(lat, lon)
-            st.write(f"**Zone:** {kz} (EPSG:{ke})")
-            show_kalianpur_accuracy(kz)
-            c3, c4 = st.columns(2)
-            c3.metric("Easting", f"{e:.3f}")
-            c4.metric("Northing", f"{n:.3f}")
-            st.code(f"{e:.3f}, {n:.3f}", language="text")
-        except Exception as exc:
-            st.warning(f"Kalianpur conversion unavailable: {exc}")
-
-        # 3. DSM WGS84/LCC grid, using the supplied parameter table.
-        st.subheader("3. DSM Grid (WGS84/LCC)")
-        try:
-            zone, e, n = wgs84_to_dsm(lat, lon, position_dsm_zone)
-            st.write(f"**DSM zone:** {zone}")
-            st.caption(DSM_NOTE)
-            c5, c6 = st.columns(2)
-            c5.metric("DSM Easting", f"{e:.3f}")
-            c6.metric("DSM Northing", f"{n:.3f}")
-            st.code(f"{zone}: E {e:.3f} m, N {n:.3f} m", language="text")
-        except Exception as exc:
-            st.warning(f"DSM conversion unavailable: {exc}")
-
-        # 4. Google Maps Link
-        st.markdown(f"""<a href="https://www.google.com/maps/search/?api=1&query={lat},{lon}" target="_blank"><button style="background-color:#4CAF50; color:white; padding:10px 20px; border:none; border-radius:5px; cursor:pointer;">Open in Google Maps 🗺️</button></a>""", unsafe_allow_html=True)
+    render_own_position(lambda lat, lon: show_position_coordinates(lat, lon, position_dsm_zone))
 
 # --- TAB 12: ZONE LIST ---
 with tabs[12]:

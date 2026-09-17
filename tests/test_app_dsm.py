@@ -1,4 +1,5 @@
 import io
+import time
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -104,7 +105,7 @@ class AppDsmTests(unittest.TestCase):
                 self.assertEqual(result["datum_accuracy_m"], 22)
 
     def test_own_position_can_show_dsm_outside_kalianpur_coverage(self):
-        location = {"coords": {"latitude": 7.9, "longitude": 77, "accuracy": 5}}
+        location = {"timestamp": time.time() * 1000, "coords": {"latitude": 7.9, "longitude": 77, "accuracy": 5}}
         with patch("streamlit_js_eval.streamlit_js_eval", return_value=location):
             self.app.checkbox("get_pos_checkbox").check().run()
         self.assertFalse(self.app.exception)

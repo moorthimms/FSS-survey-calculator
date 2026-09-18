@@ -104,3 +104,11 @@ The DOM tests validate application state, tool handlers and persistence without 
 
 - [PROJ Lambert conformal conic parameters](https://proj.org/en/stable/operations/projections/lcc.html)
 - [Esri World Imagery service](https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer) and [World Topo service](https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer)
+
+## Default India topographic map
+
+The initial basemap is Survey of India Open Series Maps at 1:50,000, georeferenced and served by the community [ramSeraph/india_topo_maps](https://github.com/ramSeraph/india_topo_maps) project. It uses the repository's published XYZ URL `https://indianopenmaps.fly.dev/soi/osm/{z}/{x}/{y}.webp`, with the upstream viewer’s default 256-pixel XYZ tile size. This app conservatively caps tile requests at zoom 14 (the upstream layer’s displayed zoom limit). Closer zooms enlarge existing tiles; they do not increase source detail. Attribution and links to the sheet listing and download repository are included in Layers.
+
+The default applies when opening the workspace; map selection remains available during use. Online connectivity and provider availability are required. Sheet coverage, dates and georeferencing quality vary. Unavailable tiles remain blank with the map's existing loading-error message; users can select another source or import an offline atlas. No bulk download or full-country archive is performed. The upstream project's MBTiles workflow can be used separately, with a suitably sized raster atlas imported through the existing offline map controls.
+
+This changes the background image only. Existing grid definitions, source identifiers, cursor DEM elevation and GPS height retain their separate sources and behavior. Printed map contours are not used as automatic height measurements.

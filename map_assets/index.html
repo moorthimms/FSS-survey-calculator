@@ -332,6 +332,9 @@
           <h2>Maps & offline areas</h2>
           <label
             >Base map<select id="basemap">
+              <option value="india-topo" selected>
+                India topo · SOI 1:50,000 · online
+              </option>
               <option value="osm">OpenStreetMap · online</option>
               <option value="satellite">Satellite imagery · Esri online</option>
               <option value="topographic">Topographic · Esri online</option>
@@ -340,6 +343,23 @@
               <option value="mbtiles">Imported MBTiles · offline</option>
               <option value="cache">Downloaded area · offline</option>
             </select></label
+          ><small id="basemap-note"
+            >India topo maps: Survey of India Open Series Maps, served by the
+            community india_topo_maps project. Coverage and sheet dates vary;
+            gaps may be blank. These map images do not supply cursor elevation.
+            <a
+              href="https://github.com/ramSeraph/india_topo_maps"
+              target="_blank"
+              rel="noopener"
+              >Source and downloads</a
+            >
+            ·
+            <a
+              href="https://ramseraph.github.io/india_topo_maps/50k/osm/sheets"
+              target="_blank"
+              rel="noopener"
+              >Sheet listing</a
+            ></small
           ><label
             >Custom XYZ URL<input
               id="tile-url"

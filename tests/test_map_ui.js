@@ -249,6 +249,20 @@ test("map initializes and all six tool panels are selectable", async () => {
     assert.match(t.$("coord-primary").textContent, /30.3165000/);
     assert.ok(t.map.sources.landmarks);
     assert.ok(t.map.layers.basemap);
+    assert.equal(t.$("basemap").value, "india-topo");
+    assert.equal(
+      t.map.sources.basemap.tiles[0],
+      "https://indianopenmaps.fly.dev/soi/osm/{z}/{x}/{y}.webp",
+    );
+    assert.equal(t.map.sources.basemap.maxzoom, 14);
+    assert.equal(t.map.sources.basemap.tileSize, 256);
+    assert.match(t.map.sources.basemap.attribution, /Survey of India/);
+    assert.equal(t.$("basemap-note").hidden, false);
+    await t.change("basemap", "osm");
+    assert.equal(t.$("basemap-note").hidden, true);
+    assert.match(t.map.sources.basemap.tiles[0], /tile.openstreetmap.org/);
+    await t.change("basemap", "india-topo");
+    assert.equal(t.$("basemap-note").hidden, false);
   } finally {
     t.close();
   }

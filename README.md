@@ -27,7 +27,7 @@ For browser location, serve the application through HTTPS (or use localhost) and
 
 ## Map and menu
 
-Open **Menu → Map** for the field workspace. Its tool menu contains **Mark & measure**, **Landmarks & files**, **GPS & navigation**, **Maps & offline areas**, **Elevation & terrain**, and **Display & field help**. Existing calculations remain in the main sidebar menu; only the selected page renders.
+Open **Menu → Map** for the field workspace. The default basemap is **India topo · SOI 1:50,000**, using the [india_topo_maps](https://github.com/ramSeraph/india_topo_maps) project's published online XYZ service. Source credits and sheet/download links appear under Layers. Maps load on demand; coverage and sheet dates vary. Tile requests are capped at zoom 14; closer views enlarge those tiles. Street, satellite, topographic, custom and offline options remain selectable. This raster layer does not change WGS84/DSM/Kalianpur conversions or supply measured elevation. Its tool menu contains **Mark & measure**, **Landmarks & files**, **GPS & navigation**, **Maps & offline areas**, **Elevation & terrain**, and **Display & field help**. Existing calculations remain in the main sidebar menu; only the selected page renders.
 
 Map tools include center-crosshair marking, editable routes and areas, ellipsoidal measurements, DD/DMS/UTM/MGRS/DSM/Kalianpur readouts and grids, local landmark storage, GPS tracks with gap handling, destination/path guidance, dual-axis track profiles, offline raster MBTiles, HGT relief/hillshade/slope, optional online terrain, import/export and a downloadable standalone HTML workspace. See the [complete feature coverage and field guide](docs/map-workspace.md).
 

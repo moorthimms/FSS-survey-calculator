@@ -1108,6 +1108,16 @@
   function applyBasemap() {
     const type = val("basemap");
     let source = null;
+    $("basemap-note").hidden = type !== "india-topo";
+    if (type === "india-topo")
+      source = {
+        type: "raster",
+        tiles: ["https://indianopenmaps.fly.dev/soi/osm/{z}/{x}/{y}.webp"],
+        tileSize: 256,
+        maxzoom: 14,
+        attribution:
+          'Maps © <a href="https://onlinemaps.surveyofindia.gov.in/FreeMapSpecification.aspx" target="_blank" rel="noopener">Survey of India · Open Series Maps 1:50,000</a> · Processing / tiles: <a href="https://github.com/ramSeraph/india_topo_maps" target="_blank" rel="noopener">ramSeraph / india_topo_maps</a>',
+      };
     if (type === "osm")
       source = {
         type: "raster",

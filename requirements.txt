@@ -3,3 +3,11 @@ pyproj>=3.1
 pandas
 streamlit-js-eval
 pyserial>=3.5,<4
+
+# GIS data preparation (Map workbench)
+geopandas>=1,<2
+pyogrio>=0.10,<1
+rasterio>=1.4,<2
+laspy[lazrs]>=2.5,<3
+plotly>=6,<7
+psycopg[binary]>=3.2,<4

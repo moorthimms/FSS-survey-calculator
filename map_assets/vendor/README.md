@@ -14,3 +14,5 @@ These pinned upstream distributions are bundled locally so the map client and ex
 The unminified GeographicLib distribution is intentionally used. The initially downloaded minified artifact failed known inverse-distance fixtures; do not substitute a different bundle without running the geodesic tests. sql.js uses its self-contained asm.js distribution to avoid an external WebAssembly file request in offline HTML.
 
 Map data, terrain data and imported files have their own provider licenses; these software licenses do not cover those datasets.
+
+Turf 7.2.0 (`turf.js`, MIT, `turf-LICENSE.txt`) supplies the bounded browser spatial analysis and point-on-feature labeling routines. Its distribution hash and upstream URL are recorded in the manifest.

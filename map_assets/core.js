@@ -167,6 +167,29 @@
           id: String(f.id || cryptoId()),
           geometry: { type, coordinates: c },
           properties: {
+            attributes: Object.fromEntries(
+              Object.entries(p.attributes || p)
+                .filter(
+                  ([k, v]) =>
+                    ![
+                      "__proto__",
+                      "constructor",
+                      "prototype",
+                      "samples",
+                      "attributes",
+                    ].includes(k) &&
+                    (v === null ||
+                      typeof v === "boolean" ||
+                      typeof v === "string" ||
+                      (typeof v === "number" && Number.isFinite(v))),
+                )
+                .slice(0, 64)
+                .map(([k, v]) => [
+                  k.slice(0, 100),
+                  typeof v === "string" ? v.slice(0, 2000) : v,
+                ]),
+            ),
+            annotation: p.annotation === true,
             name: String(p.name || "Untitled").slice(0, 160),
             folder: String(p.folder || "Imported").slice(0, 100),
             description: String(p.description || "").slice(0, 3000),

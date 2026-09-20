@@ -112,3 +112,31 @@ The initial basemap is Survey of India Open Series Maps at 1:50,000, georeferenc
 The default applies when opening the workspace; map selection remains available during use. Online connectivity and provider availability are required. Sheet coverage, dates and georeferencing quality vary. Unavailable tiles remain blank with the map's existing loading-error message; users can select another source or import an offline atlas. No bulk download or full-country archive is performed. The upstream project's MBTiles workflow can be used separately, with a suitably sized raster atlas imported through the existing offline map controls.
 
 This changes the background image only. Existing grid definitions, source identifiers, cursor DEM elevation and GPS height retain their separate sources and behavior. Printed map contours are not used as automatic height measurements.
+
+## Advanced map workspace
+
+The main toolbar follows five tasks: **Draw → Layers → Style → Analyze → Export**. GPS, terrain and display settings remain under Field tools. Existing calculators and verified DSM/Kalianpur definitions are unchanged.
+
+- **Layers:** show/hide and reorder vector folders; import GeoJSON including multipoints/multipolygons; inspect attributes and select/case-convert fields with unique primary-key validation. Add an attributed HTTPS WMS 1.1.1 EPSG:3857 raster or a WFS/GeoJSON URL returning WGS84. Web services require browser CORS permission; WMS configuration is session-only.
+- **Style:** original/single colors, categories, graduated colors/sizes, point heatmaps, zoom-limited attribute labels, label margins and nearby duplicate suppression. Text annotations are editable point features. Graduated legends show the observed value range per color. Categories cycle through eight colors.
+- **Analyze:** bounded browser operations for buffers, centroids, polygon dissolve, polygon intersection, clipping points/polygons, and selecting intersecting features. Results become new layers; inputs are retained. These use Turf geometry, not cadastral or survey-grade geodetic buffering. Existing terrain/profile tools remain available.
+- **Globe and scale:** switch the main Earth map between flat Mercator and globe in Display; disable terrain before globe. Export supports center, top, bottom, average and equatorial scale references for untilted flat views. No constant scale bar is claimed for tilted/globe views. The normal navigation scale control retains its own center reference.
+- **Export:** compose a raster layout with title, notes, legend, north arrow, scale and source credits, then download PNG or use browser Print/Save as PDF. The PDF is raster, not an editable QGIS layout. Wait for tiles to load; unavailable provider tiles cannot be supplied by the app. Layout dimensions follow the current map canvas; at most 100 legend entries per print.
+
+### GIS data workbench
+
+Below the map, the host-side workbench prepares GIS files. Uploads here are processed by the app server. Browser drawing, styling and vector analysis stay in the browser. Download prepared files and import them with Layers → Import.
+
+| Input/workflow | Support and bounds |
+| --- | --- |
+| Shapefile ZIP / GeoPackage | Layer selection, explicit CRS when missing, WGS84 reprojection, selected fields, case and primary-key checks; 2,000 features / 50,000 vertices |
+| GeoTIFF | Georeferenced Web Mercator PNG preview up to 1,024 pixels with nodata transparency; display overlay, not a height model |
+| LAS / LAZ / COPC | Read cloud metadata and a bounded sample, 3D scatter preview, map sample export; original Z is a source-reference attribute, not an assumed WGS84 height |
+| COPC creation | Fixed PDAL pipeline, enabled only with native PDAL and `FSS_ENABLE_NATIVE_GIS=1`; native execution requires host commissioning |
+| VPC | Manifest/asset inspection only; remote assets are not downloaded or mosaicked automatically |
+| PostGIS | Read registered spatial tables through host-configured `FSS_POSTGIS_DSN`, read-only transactions and bounded output; no browser-stored database credentials |
+| Planetary scene | Separate unit-sphere texture preview for Earth/Mars/Moon; user-supplied 2:1 equirectangular image, standalone HTML export; no planetary survey CRS or terrain conversion |
+
+Upload limit is 80 MB; archive extraction is bounded. Map raster overlays are limited to four, with an 8 MB encoded PNG limit each. Browser project backups include styles, vector layer order/visibility and prepared raster overlays. Web service sessions and native host configuration are not part of a backup.
+
+Install the entire `requirements.txt` to enable the workbench, including pyproj, GeoPandas/pyogrio, rasterio, laspy/lazrs, Plotly and psycopg. PDAL remains an optional native host dependency. This is a focused GIS workspace; it does not embed QGIS, GRASS or SAGA or claim their full algorithm catalogs. Native PDAL, a live PostGIS service and real browser WebGL/printing require deployment validation; automated tests cover the pure operations, generated GIS file fixtures and simulated map UI.

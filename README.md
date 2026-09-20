@@ -217,3 +217,7 @@ python -m streamlit run app.py
 On Streamlit Community Cloud, deploy the complete repository with `requirements.txt` at its root, then use **Manage app → Reboot app**. Check installation logs if pyproj still cannot load. Updating only `app.py` can leave `geodesy.py` or `data/` out of sync.
 
 Startup now distinguishes a genuinely absent pyproj package, native-library import failures, and application-module failures, preserving the underlying error. If Streamlit retains an older geodesy module that lacks a newly required export, startup reloads it from disk once. It never installs packages at runtime or substitutes another projection engine.
+
+### Advanced Map workspace
+
+The Map page now groups tools into Draw, Layers, Style, Analyze and Export. It includes layer ordering, attribute tables, categorized/graduated symbols, heatmaps, label controls, spatial analysis, Earth globe view and print layouts. A GIS data workbench below the map prepares Shapefile, GeoPackage, GeoTIFF and point-cloud inputs, with optional host-configured PostGIS/PDAL and separate planetary texture previews. See [map workspace documentation](docs/map-workspace.md#advanced-map-workspace) for supported workflows and deployment limits. Install the complete requirements file; the workbench processes uploaded files on the app host.

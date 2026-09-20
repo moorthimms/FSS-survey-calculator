@@ -59,6 +59,7 @@
     terrainRevision = 0;
   const onlineElevation = new Map();
   let gridMarkers = [];
+  let gis = null;
   let lastNavTime = null;
   let cursorPoint = null,
     elevationTimer = null,
@@ -197,6 +198,28 @@
   }
   function showPanel(name) {
     $("panel-select").value = name;
+    const task = {
+      draw: "tool-draw",
+      layers: "tool-layers",
+      style: "tool-style",
+      analyze: "tool-analyze",
+      print: "tool-print",
+    }[name];
+    document
+      .querySelectorAll(".task-button")
+      .forEach((b) => b.setAttribute("aria-pressed", String(b.id === task)));
+    const hints = {
+      draw: "Choose Point, Line or Area, then tap the map. Save when finished.",
+      layers: "Import data or choose a basemap. Top layers draw last.",
+      style: "Choose a layer and attribute, then Apply style.",
+      analyze: "Choose an input layer. Analysis creates a separate result.",
+      print: "Frame the map, add a title, then Build print preview.",
+    };
+    set(
+      "gis-mode-hint",
+      hints[name] ||
+        "Field tools · Your map and landmarks stay in this workspace.",
+    );
     document
       .querySelectorAll(".panel")
       .forEach((e) => (e.hidden = e.id !== `panel-${name}`));
@@ -258,6 +281,7 @@
     }
   }
   function renderList() {
+    gis?.sync();
     const filter = val("search").toLowerCase(),
       folder = val("folder-filter");
     const list = $("landmark-list");
@@ -298,16 +322,20 @@
   }
   function renderFeatures() {
     if (!map?.getSource("landmarks")) return;
-    const features = state.features.filter(
-      (f) => f.properties.visible !== false,
-    );
+    gis?.sync();
+    const features = gis
+      ? gis.styled()
+      : state.features.filter((f) => f.properties.visible !== false);
     setGeo("landmarks", features);
+    gis?.drawLayers(features);
     markers.forEach((m) => m.remove());
     markers = [];
     features
       .filter(
         (f) =>
           f.geometry.type === "Point" &&
+          !f.properties.annotation &&
+          state.gis?.styles?.[f.properties.folder]?.mode !== "heatmap" &&
           map.getBounds().contains(f.geometry.coordinates),
       )
       .slice(0, 250)
@@ -319,7 +347,7 @@
           { pin: "•", flag: "⚑", camp: "▲", survey: "＋" }[
             f.properties.symbol
           ] || "•";
-        if (checked("show-labels")) {
+        if (checked("show-labels") && !gis) {
           const label = document.createElement("span");
           label.className = "waypoint-label";
           label.textContent = f.properties.name;
@@ -1374,6 +1402,7 @@
     if (saved) {
       state.features = C.validateFeatures(collection(saved.features || []));
       state.settings = saved.settings || {};
+      state.gis = saved.gis;
       if (saved.view && Array.isArray(saved.view.center)) {
         state.view = {
           center: C.coord(saved.view.center),
@@ -1404,6 +1433,7 @@
   }
   try {
     map = new maplibregl.Map({
+      canvasContextAttributes: { preserveDrawingBuffer: true },
       container: "map",
       center: state.view.center,
       zoom: state.view.zoom,
@@ -1506,7 +1536,9 @@
             return;
           }
           const matches = map.queryRenderedFeatures(e.point, {
-            layers: ["landmarks-points", "landmarks-line", "landmarks-fill"],
+            layers: gis
+              ? gis.layerIds().filter((id) => !id.endsWith("heatmap"))
+              : ["landmarks-points", "landmarks-line", "landmarks-fill"],
           });
           if (matches.length) {
             showPanel("landmarks");
@@ -1532,6 +1564,22 @@
         persist();
       });
       map.on("idle", updateHeight);
+      gis = window.FSSAdvanced?.mount({
+        map,
+        state,
+        C,
+        IO,
+        addFeatures,
+        refresh: () => {
+          renderFeatures();
+          renderList();
+        },
+        persist,
+        say,
+        showPanel,
+        downloadBlob,
+        centerPoint,
+      });
       applyBasemap();
       renderFeatures();
       renderList();
@@ -1790,13 +1838,17 @@
   on("import-files", "change", async () => {
     let incoming = [];
     for (const f of $("import-files").files) {
+      if (gis && (await gis.importFile(f))) continue;
       const features = await IO.importLandmarks(f);
+      features.forEach((q) => {
+        if (q.properties.folder === "Imported") q.properties.folder = f.name;
+      });
       incoming.push(...features);
     }
     addFeatures(incoming);
     if (incoming.length) zoomFeature(incoming[0]);
     $("import-files").value = "";
-    say(`Imported ${incoming.length} landmarks.`);
+    if (incoming.length) say(`Imported ${incoming.length} landmarks.`);
   });
   on("export", "click", () => {
     const format = val("export-format");
@@ -1830,6 +1882,7 @@
               type: "FSSProject",
               version: 1,
               landmarks: collection(state.features),
+              gis: state.gis,
             },
             null,
             2,

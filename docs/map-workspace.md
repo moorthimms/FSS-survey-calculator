@@ -140,3 +140,22 @@ Below the map, the host-side workbench prepares GIS files. Uploads here are proc
 Upload limit is 80 MB; archive extraction is bounded. Map raster overlays are limited to four, with an 8 MB encoded PNG limit each. Browser project backups include styles, vector layer order/visibility and prepared raster overlays. Web service sessions and native host configuration are not part of a backup.
 
 Install the entire `requirements.txt` to enable the workbench, including pyproj, GeoPandas/pyogrio, rasterio, laspy/lazrs, Plotly and psycopg. PDAL remains an optional native host dependency. This is a focused GIS workspace; it does not embed QGIS, GRASS or SAGA or claim their full algorithm catalogs. Native PDAL, a live PostGIS service and real browser WebGL/printing require deployment validation; automated tests cover the pure operations, generated GIS file fixtures and simulated map UI.
+
+## Google Maps companion
+
+Choose **Map workspace → Google Maps** to open the official Google Maps view. The default Field workspace and India topo basemap remain available. The views have independent camera state; Field workspace landmarks, analysis, grids and offline files remain there and are not automatically copied onto Google Maps.
+
+The Google view provides roadmap, satellite, hybrid and terrain; place/address search with explicit result selection; WGS84 decimal latitude/longitude search; From/To routes for driving, walking, cycling or transit; swap endpoints/use map center; distance/time summaries; traffic/transit overlays; Street View (Pegman); device location with reported accuracy and height; north reset; zoom; and Google 3D satellite/hybrid exploration with tilt and heading. Routes render on the 2D map. Use **Navigate in Google Maps** for turn-by-turn instructions. **Open Google Earth** opens Google's separate application; Google Earth history, projects and its full desktop toolset are not embedded.
+
+### Host configuration
+
+- `GOOGLE_MAPS_BROWSER_KEY`: website-restricted browser key. Enable Maps JavaScript API, Geocoding API and Routes API with billing. Restrict the key to the actual deployed app/iframe referrer and required APIs. Verify restrictions in the deployed browser; never loosen a key to unrestricted access to bypass an iframe issue.
+- `GOOGLE_MAPS_MAP_ID` (optional): your Google cloud map ID. Otherwise the SDK demonstration ID is used for advanced markers; configure a production map ID before production commissioning.
+- `GOOGLE_MAPS_NAVIGATION_MAP_ID` (optional): a map ID associated with your navigation-style cloud map. This view is disabled when absent; it is a style, not an embedded turn-by-turn navigation engine.
+- `GOOGLE_MAPS_EXPERIMENTAL=1` (optional): explicitly opts into the SDK alpha channel and enables experimental 3D roadmap. Without it, the weekly SDK and standard 3D modes are used. Device, coverage and Google API availability still apply.
+
+Without a key, the page explains setup, validates coordinates and offers Google Maps search/direction links. No key is saved in project backups or offline HTML. Browser keys are necessarily visible to visitors and must be restricted; server secrets must not be supplied here. Google requests occur when this view loads or the user searches/routes; Google content is rendered by its official SDK, not scraped into the offline atlas. Searches/routes are not persisted by this client.
+
+Validation uses SDK adapters for map switching, safe search results, route requests/cleanup, stale response rejection, no-key behavior and authentication feedback, plus Streamlit page-switch tests. Live Google billing, key restrictions, imagery, route results and 3D rendering require a configured deployment and were not exercised in automated tests.
+
+Official references: [map types](https://developers.google.com/maps/documentation/javascript/maptypes), [route computation](https://developers.google.com/maps/documentation/javascript/routes/get-a-route), [route fields](https://developers.google.com/maps/documentation/javascript/reference/route), [3D modes](https://developers.google.com/maps/documentation/javascript/3d/map-modes).

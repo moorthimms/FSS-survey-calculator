@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Google map explorer</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #edf3f5;
+        color: #173844;
+        font: 14px system-ui;
+      }
+      header {
+        padding: 12px 16px;
+        background: #173844;
+        color: white;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 285px 1fr;
+        height: 830px;
+      }
+      aside {
+        overflow: auto;
+        padding: 12px;
+      }
+      section {
+        background: white;
+        padding: 12px;
+        margin-bottom: 10px;
+        border-radius: 10px;
+      }
+      h2 {
+        font-size: 15px;
+        margin: 0 0 8px;
+      }
+      label {
+        display: block;
+        margin: 8px 0;
+      }
+      input,
+      select,
+      button,
+      a.action {
+        font: inherit;
+        padding: 9px;
+        border: 1px solid #a9bec5;
+        border-radius: 6px;
+        max-width: 100%;
+      }
+      input:not([type="checkbox"]),
+      select {
+        width: 100%;
+        margin-top: 4px;
+      }
+      button {
+        background: #e2f1f1;
+        color: #173844;
+        cursor: pointer;
+        margin: 3px 0;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .row {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
+      a {
+        color: #076777;
+      }
+      .action {
+        display: inline-block;
+        margin: 8px 0;
+        background: white;
+      }
+      small {
+        display: block;
+        color: #526d78;
+        line-height: 1.5;
+      }
+      #canvas {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-height: 440px;
+      }
+      #map,
+      #earth {
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+      }
+      #earth[hidden],
+      #map[hidden] {
+        display: none;
+      }
+      #status {
+        padding: 10px;
+        margin: 0;
+        background: #fff;
+        min-height: 40px;
+      }
+      #coordinates {
+        padding: 8px;
+        background: #dfecee;
+        font-variant-numeric: tabular-nums;
+      }
+      .results button {
+        text-align: left;
+        width: 100%;
+      }
+      #route-summary {
+        white-space: pre-wrap;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible {
+        outline: 3px solid #e18b38;
+      }
+      @media (max-width: 700px) {
+        main {
+          display: flex;
+          flex-direction: column;
+          height: auto;
+        }
+        aside {
+          max-height: 350px;
+        }
+        #canvas {
+          height: 480px;
+        }
+      }
+      gmp-map-3d {
+        height: 100%;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>Google Maps explorer</strong> · Search → Choose map → Directions
+    </header>
+    <p id="status" role="status" aria-live="polite">Preparing Google view…</p>
+    <main>
+      <aside>
+        <section>
+          <h2>Search</h2>
+          <label
+            >Place, address or latitude, longitude<input
+              id="query"
+              placeholder="Pithoragarh or 29.583, 80.218"
+              maxlength="300" /></label
+          ><button id="search">Find location</button>
+          <div id="results" class="results"></div>
+          <a
+            id="external-search"
+            target="_blank"
+            rel="noopener noreferrer"
+            href="https://www.google.com/maps"
+            >Open in Google Maps ↗</a
+          ><small
+            >Coordinates use WGS84 decimal degrees, latitude first. For
+            DSM/Kalianpur grid input use Field workspace → Coordinates.</small
+          >
+        </section>
+        <section>
+          <h2>Map type</h2>
+          <label
+            >View<select id="map-type">
+              <option value="roadmap">Roadmap</option>
+              <option value="satellite">Satellite</option>
+              <option value="hybrid">Hybrid · imagery + labels</option>
+              <option value="terrain">Terrain</option>
+              <option value="navigation">Navigation cloud style</option>
+              <option value="3d-hybrid">3D hybrid</option>
+              <option value="3d-satellite">3D satellite</option>
+              <option value="3d-roadmap">3D roadmap · experimental</option>
+            </select></label
+          ><small id="type-note"></small
+          ><label><input id="traffic" type="checkbox" /> Traffic (2D)</label
+          ><label
+            ><input id="transit" type="checkbox" /> Public transport (2D)</label
+          ><small
+            >Street View: drag Google's yellow Pegman onto available roads in
+            2D.</small
+          >
+        </section>
+        <section>
+          <h2>From / To directions</h2>
+          <label
+            >From<input
+              id="origin"
+              placeholder="Place or latitude, longitude"
+              maxlength="300"
+          /></label>
+          <div class="row">
+            <button id="origin-center">Use map center</button
+            ><button id="swap">Swap ⇅</button>
+          </div>
+          <label
+            >To<input
+              id="destination"
+              placeholder="Place or latitude, longitude"
+              maxlength="300" /></label
+          ><button id="destination-center">Use map center</button
+          ><label
+            >Travel<select id="travel">
+              <option value="DRIVING">Driving</option>
+              <option value="WALKING">Walking</option>
+              <option value="BICYCLING">Cycling</option>
+              <option value="TRANSIT">Public transport</option>
+            </select></label
+          >
+          <div class="row">
+            <button id="route">Show route</button
+            ><button id="clear-route">Clear</button>
+          </div>
+          <p id="route-summary"></p>
+          <a
+            id="external-route"
+            target="_blank"
+            rel="noopener noreferrer"
+            href="https://www.google.com/maps/dir/"
+            >Navigate in Google Maps ↗</a
+          ><small
+            >Routes display in 2D. Use Google Maps for turn-by-turn navigation.
+            Availability depends on region and travel mode.</small
+          >
+        </section>
+        <section>
+          <h2>Camera &amp; own position</h2>
+          <div class="row">
+            <button id="own">◎ Own position</button
+            ><button id="north">↑ North</button
+            ><button id="zoom-in">Zoom +</button
+            ><button id="zoom-out">Zoom −</button>
+          </div>
+          <label
+            >3D tilt
+            <input id="tilt" type="range" min="0" max="80" value="60" /></label
+          ><label
+            >3D heading
+            <input
+              id="heading"
+              type="range"
+              min="0"
+              max="359"
+              value="0" /></label
+          ><button id="camera">Apply 3D camera</button
+          ><a
+            class="action"
+            href="https://earth.google.com/web/"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Open Google Earth ↗</a
+          ><small
+            >3D imagery depends on Google's coverage and device support. This
+            view uses Google Maps 3D; it does not embed the full Google Earth
+            application.</small
+          >
+        </section>
+      </aside>
+      <div id="canvas">
+        <div id="coordinates">WGS84 · latitude, longitude</div>
+        <div id="map"></div>
+        <div id="earth" hidden></div>
+      </div>
+    </main>
+    <script>
+      /* GOOGLE_SCRIPT */
+    </script>
+  </body>
+</html>

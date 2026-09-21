@@ -221,3 +221,5 @@ Startup now distinguishes a genuinely absent pyproj package, native-library impo
 ### Advanced Map workspace
 
 The Map page now groups tools into Draw, Layers, Style, Analyze and Export. It includes layer ordering, attribute tables, categorized/graduated symbols, heatmaps, label controls, spatial analysis, Earth globe view and print layouts. A GIS data workbench below the map prepares Shapefile, GeoPackage, GeoTIFF and point-cloud inputs, with optional host-configured PostGIS/PDAL and separate planetary texture previews. See [map workspace documentation](docs/map-workspace.md#advanced-map-workspace) for supported workflows and deployment limits. Install the complete requirements file; the workbench processes uploaded files on the app host.
+
+The Map page also offers an official **Google Maps** companion for roadmap/satellite/hybrid/terrain switching, place and coordinate search, From/To directions, traffic, Street View and 3D exploration. Set `GOOGLE_MAPS_BROWSER_KEY` on the host and enable the required Google services; see [Google setup](docs/map-workspace.md#google-maps-companion). The Field workspace remains the default for surveying and offline use.

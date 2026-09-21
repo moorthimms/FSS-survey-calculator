@@ -26,5 +26,9 @@
   "sql-asm.js": {
     "source": "https://unpkg.com/sql.js@1.13.0/dist/sql-asm.js",
     "sha256": "c83beac167ae9c1af075449555b1db68b24b5280d0fc65c1f7ac4d1cd103459d"
+  },
+  "turf.js": {
+    "source": "https://unpkg.com/@turf/turf@7.2.0/turf.min.js",
+    "sha256": "d5786c08ae4e988b37aa5c26de32b051ec2e4680f602f2a98ca3bc4b328e3432"
   }
 }

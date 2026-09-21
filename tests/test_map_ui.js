@@ -26,6 +26,12 @@ async function setup(storage = new IDBFactory()) {
   );
   const w = dom.window;
   w.structuredClone = structuredClone;
+  w.HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  w.HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
   w.indexedDB = storage;
   w.TextDecoder = TextDecoder;
   w.TextEncoder = TextEncoder;
@@ -107,6 +113,46 @@ async function setup(storage = new IDBFactory()) {
       delete this.layers[id];
     }
     setPaintProperty() {}
+    setLayoutProperty(id, key, value) {
+      this.layers[id].layout ??= {};
+      this.layers[id].layout[key] = value;
+    }
+    getProjection() {
+      return { type: this.projection || "mercator" };
+    }
+    setProjection(p) {
+      this.projection = p.type;
+    }
+    getTerrain() {
+      return this.terrain;
+    }
+    getPitch() {
+      return this.pitch || 0;
+    }
+    getBearing() {
+      return this.bearing || 0;
+    }
+    project(p) {
+      return {
+        x: 400 + (p[0] - this.center[0]) * 10000,
+        y: 300 - (p[1] - this.center[1]) * 10000,
+      };
+    }
+    unproject(p) {
+      return {
+        lng: this.center[0] + (p[0] - 400) / 10000,
+        lat: this.center[1] - (p[1] - 300) / 10000,
+      };
+    }
+    getCanvas() {
+      return { clientWidth: 800, clientHeight: 600, width: 800, height: 600 };
+    }
+    getStyle() {
+      return { sources: this.sources };
+    }
+    areTilesLoaded() {
+      return true;
+    }
     setTerrain(t) {
       this.terrain = t;
     }
@@ -153,6 +199,13 @@ async function setup(storage = new IDBFactory()) {
     addProtocol: (name, fn) => (protocols[name] = fn),
   };
   w.HTMLCanvasElement.prototype.getContext = () => ({
+    drawImage() {},
+    fillRect() {},
+    save() {},
+    restore() {},
+    translate() {},
+    rotate() {},
+    measureText: (text) => ({ width: text.length * 7 }),
     clearRect() {},
     fillText() {},
     strokeRect() {},
@@ -163,6 +216,7 @@ async function setup(storage = new IDBFactory()) {
     createImageData: () => ({ data: new Uint8ClampedArray(256 * 256 * 4) }),
     putImageData() {},
   });
+  w.HTMLCanvasElement.prototype.toDataURL = () => "data:image/png;base64,AA==";
   Object.defineProperty(w.navigator, "geolocation", {
     value: {
       watchPosition(fn) {
@@ -201,8 +255,11 @@ async function setup(storage = new IDBFactory()) {
     "vendor/geographiclib.js",
     "vendor/proj4.js",
     "vendor/mgrs.js",
+    "vendor/turf.js",
     "core.js",
     "files.js",
+    "advanced-core.js",
+    "advanced.js",
     "app.js",
   ])
     w.eval(fs.readFileSync(path.join(root, name), "utf8"));
@@ -565,6 +622,101 @@ test("cursor elevation loads on demand, caches raw height and does not redraw ge
     t.$("cursor-elevation").checked = false;
     t.$("cursor-elevation").dispatchEvent(new t.w.Event("change"));
     assert.match(t.$("center-height").textContent, /unavailable/);
+  } finally {
+    t.close();
+  }
+});
+
+test("cartography tasks style layers, create buffers, annotations and switch globe", async () => {
+  const t = await setup();
+  try {
+    await t.click("tool-point");
+    await t.click("add-center");
+    t.$("draw-name").value = "Survey point";
+    await t.click("save-drawing");
+    assert.match(t.$("gis-layer-list").textContent, /Field work/);
+    await t.click("tool-style");
+    assert.equal(t.$("panel-style").hidden, false);
+    await t.change("gis-style-mode", "single");
+    t.$("gis-color").value = "#ff0000";
+    await t.click("gis-style-apply");
+    assert.equal(
+      t.map.sources.landmarks.data.features[0].properties.color,
+      "#ff0000",
+    );
+    await t.click("tool-analyze");
+    await t.change("gis-operation", "buffer");
+    await t.click("gis-analyze");
+    assert.equal(t.map.sources.landmarks.data.features.length, 2);
+    assert.match(t.$("gis-analysis-status").textContent, /1 output/);
+    t.$("gis-annotation").value = "<script>literal text</script>";
+    await t.click("gis-annotation-add");
+    assert.equal(t.map.sources.landmarks.data.features.length, 3);
+    assert.equal(
+      t.w.document.querySelectorAll(".gis-annotation script").length,
+      0,
+    );
+    await t.change("gis-projection", "globe");
+    assert.equal(t.map.projection, "globe");
+    await t.change("gis-projection", "mercator");
+    assert.equal(t.map.projection, "mercator");
+    await t.click("gis-table-open");
+    assert.equal(t.$("gis-table-dialog").open, true);
+    await t.click("gis-table-close");
+    assert.equal(t.$("gis-table-dialog").open, false);
+  } finally {
+    t.close();
+  }
+});
+
+test("layer visibility and heatmap change rendered data without deleting landmarks", async () => {
+  const t = await setup();
+  try {
+    await t.click("tool-point");
+    await t.click("add-center");
+    await t.click("save-drawing");
+    await t.click("tool-style");
+    await t.change("gis-style-mode", "heatmap");
+    await t.click("gis-style-apply");
+    assert.ok(Object.values(t.map.layers).some((l) => l.type === "heatmap"));
+    const checkbox = t.$("gis-layer-list").querySelector("input");
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new t.w.Event("change"));
+    assert.equal(t.map.sources.landmarks.data.features.length, 0);
+    assert.equal(t.$("landmark-list").querySelectorAll("button").length, 1);
+  } finally {
+    t.close();
+  }
+});
+
+test("print layout opens with a legend and invalid project raster leaves features untouched", async () => {
+  const t = await setup();
+  try {
+    await t.click("tool-point");
+    await t.click("add-center");
+    await t.click("save-drawing");
+    await t.click("gis-print-preview");
+    assert.equal(t.$("gis-print-dialog").open, true);
+    assert.ok(t.$("gis-print-canvas").height > 600);
+    await t.click("gis-print-close");
+    const before = t.map.sources.landmarks.data.features.length;
+    const data = {
+      type: "FSSProject",
+      landmarks: {
+        type: "FeatureCollection",
+        features: t.map.sources.landmarks.data.features,
+      },
+      gis: { rasters: [{ data: { type: "FSSRaster", image: "invalid" } }] },
+    };
+    Object.defineProperty(t.$("import-files"), "files", {
+      value: [
+        { name: "bad.json", size: 500, text: async () => JSON.stringify(data) },
+      ],
+      configurable: true,
+    });
+    t.$("import-files").dispatchEvent(new t.w.Event("change"));
+    await delay(50);
+    assert.equal(t.map.sources.landmarks.data.features.length, before);
   } finally {
     t.close();
   }

@@ -19,24 +19,21 @@
         ><button id="toggle-tools" aria-expanded="true">☰ Map tools</button>
       </div>
     </header>
-    <nav id="map-toolbar" aria-label="Map toolbar">
-      <button
-        id="tool-browse"
-        aria-pressed="true"
-        title="Pan and select landmarks"
-      >
-        ✋ Pan
-      </button>
-      <button id="tool-point" title="Place a waypoint">⌖ Point</button>
-      <button id="tool-line" title="Draw a route and measure distance">
-        ↗ Distance
-      </button>
-      <button id="tool-area" title="Draw and measure a polygon">▱ Area</button>
-      <button id="tool-files">▤ Landmarks</button>
-      <button id="tool-layers">▧ Layers</button>
-      <button id="tool-gps">◎ GPS</button>
-      <button id="tool-terrain">△ Terrain</button>
-      <button id="tool-settings">⚙ Display</button>
+    <nav id="map-toolbar" aria-label="Workspace tasks">
+      <button id="tool-draw" class="task-button">1 · Draw</button>
+      <button id="tool-layers" class="task-button">2 · Layers & data</button>
+      <button id="tool-style" class="task-button">3 · Style & labels</button>
+      <button id="tool-analyze" class="task-button">4 · Analyze</button>
+      <button id="tool-print" class="task-button">5 · Export map</button>
+      <details class="field-menu">
+        <summary>Field tools ▾</summary>
+        <div>
+          <button id="tool-files">Landmarks & files</button
+          ><button id="tool-gps">GPS & navigation</button
+          ><button id="tool-terrain">Elevation & terrain</button
+          ><button id="tool-settings">Display settings</button>
+        </div>
+      </details>
     </nav>
     <main>
       <aside id="tools">
@@ -48,9 +45,18 @@
           <option value="layers">Maps & offline areas</option>
           <option value="terrain">Elevation & terrain</option>
           <option value="settings">Display & field help</option>
+          <option value="style">Style & labels</option>
+          <option value="analyze">Analyze</option>
+          <option value="print">Export map</option>
         </select>
         <section id="panel-draw" class="panel">
-          <h2>Mark & measure</h2>
+          <h2>Draw & measure</h2>
+          <div class="draw-tools">
+            <button id="tool-browse" aria-pressed="true">✋ Pan</button
+            ><button id="tool-point">⌖ Point</button
+            ><button id="tool-line">↗ Line</button
+            ><button id="tool-area">▱ Area</button>
+          </div>
           <p>Tap a location, or pan the map and use the center crosshair.</p>
           <label
             >Drawing tool<select id="draw-mode">
@@ -329,7 +335,71 @@
           >
         </section>
         <section id="panel-layers" class="panel" hidden>
-          <h2>Maps & offline areas</h2>
+          <h2>Layers & data</h2>
+          <p>
+            Import data, then use the arrows to set drawing order. The top layer
+            draws last.
+          </p>
+          <button id="gis-import-open" class="primary">
+            ＋ Import vector file
+          </button>
+          <div id="gis-layer-list" aria-label="Layer drawing order"></div>
+          <details>
+            <summary>Web data sources</summary>
+            <label
+              >Service<select id="gis-service">
+                <option value="wms">WMS raster · 1.1.1 / EPSG:3857</option>
+                <option value="wfs">WFS / GeoJSON URL</option>
+              </select></label
+            >
+            <label
+              >HTTPS URL<input
+                id="gis-url"
+                type="url"
+                placeholder="https://provider/service"
+            /></label>
+            <label>Layer names (WMS)<input id="gis-wms-layers" /></label>
+            <label>Attribution<input id="gis-source-credit" /></label>
+            <button id="gis-add-service">Add web layer</button>
+            <small
+              >WFS URL must return GeoJSON in longitude/latitude WGS84. Services
+              must allow browser access (CORS). Credentials remain with the
+              provider; do not paste passwords.</small
+            >
+          </details>
+          <details>
+            <summary>Database fields & attributes</summary>
+            <label>Vector layer<select id="gis-table-layer"></select></label>
+            <button id="gis-table-open">Inspect attributes</button>
+            <label
+              >Fields to keep (comma separated; blank = all)<input
+                id="gis-fields"
+            /></label>
+            <label>Primary-key field (optional)<input id="gis-key" /></label>
+            <label
+              >Field names<select id="gis-case">
+                <option value="keep">Keep case</option>
+                <option value="lower">lowercase</option>
+                <option value="upper">UPPERCASE</option>
+              </select></label
+            >
+            <button id="gis-fields-apply">Apply field settings</button>
+            <small
+              >Checks unique non-empty keys before applying. Geometry stays
+              unchanged.</small
+            >
+          </details>
+          <details>
+            <summary>
+              Shapefile, GeoPackage, GeoTIFF, PostGIS & point clouds
+            </summary>
+            <p>
+              Open <b>GIS data workbench</b> below the map to prepare these
+              formats and import the resulting GeoJSON or raster overlay here.
+              Native COPC processing is shown only when the host provides PDAL.
+            </p>
+          </details>
+          <h3>Background map</h3>
           <label
             >Base map<select id="basemap">
               <option value="india-topo" selected>
@@ -497,8 +567,187 @@
             HGT.</small
           >
         </section>
+        <section id="panel-style" class="panel" hidden>
+          <h2>Style & labels</h2>
+          <p>Choose a layer, a visual style and the attribute to show.</p>
+          <label>Layer<select id="gis-style-layer"></select></label>
+          <label
+            >Symbols<select id="gis-style-mode">
+              <option value="original">Feature colors</option>
+              <option value="single">Single symbol</option>
+              <option value="categorized">Categories</option>
+              <option value="graduated">Graduated values</option>
+              <option value="heatmap">Point heatmap</option>
+            </select></label
+          >
+          <label>Attribute<select id="gis-style-field"></select></label>
+          <div class="pair">
+            <label
+              >Color<input id="gis-color" type="color" value="#167c80" /></label
+            ><label
+              >Point radius<input
+                id="gis-size"
+                type="number"
+                min="2"
+                max="30"
+                value="6"
+            /></label>
+          </div>
+          <div class="pair">
+            <label
+              >Line width<input
+                id="gis-width"
+                type="number"
+                min="1"
+                max="12"
+                value="3" /></label
+            ><label
+              >Opacity<input
+                id="gis-opacity"
+                type="number"
+                min="0"
+                max="1"
+                step="0.1"
+                value="1"
+            /></label>
+          </div>
+          <label>Label attribute<select id="gis-label-field"></select></label>
+          <div class="pair">
+            <label
+              >From zoom<input
+                id="gis-label-min"
+                type="number"
+                min="0"
+                max="22"
+                value="0" /></label
+            ><label
+              >Through zoom<input
+                id="gis-label-max"
+                type="number"
+                min="0"
+                max="22"
+                value="22"
+            /></label>
+          </div>
+          <label
+            >Label margin (pixels)<input
+              id="gis-label-margin"
+              type="number"
+              min="0"
+              max="50"
+              value="6"
+          /></label>
+          <label class="check"
+            ><input id="gis-label-dedupe" type="checkbox" checked />Prevent
+            duplicate labels across layers</label
+          >
+          <label
+            >Duplicate exclusion distance (pixels)<input
+              id="gis-label-distance"
+              type="number"
+              min="0"
+              max="2000"
+              value="120"
+          /></label>
+          <button id="gis-style-apply" class="primary">Apply style</button>
+          <div id="gis-legend" class="readout"></div>
+          <details>
+            <summary>Text annotation</summary>
+            <label>Text<input id="gis-annotation" maxlength="160" /></label
+            ><button id="gis-annotation-add">Place text at map center</button>
+          </details>
+        </section>
+        <section id="panel-analyze" class="panel" hidden>
+          <h2>Analyze</h2>
+          <p>Results become a new layer. Your input layer is preserved.</p>
+          <label>Input layer<select id="gis-analysis-layer"></select></label>
+          <label
+            >Operation<select id="gis-operation">
+              <option value="buffer">Buffer · distance around features</option>
+              <option value="clip">Clip · keep inside polygon</option>
+              <option value="intersection">Polygon intersection</option>
+              <option value="select">Select intersecting features</option>
+              <option value="dissolve">Dissolve polygon boundaries</option>
+              <option value="centroid">Centroids</option>
+            </select></label
+          >
+          <label>Mask polygon<select id="gis-mask"></select></label>
+          <label
+            >Buffer radius (metres)<input
+              id="gis-radius"
+              type="number"
+              min="1"
+              max="50000"
+              value="100"
+          /></label>
+          <button id="gis-analyze" class="primary">Run analysis</button>
+          <div id="gis-analysis-status" class="readout">
+            Choose an input layer to begin.
+          </div>
+          <small
+            >Browser analysis supports up to 500 input features. Buffers use
+            Turf's local projection and are approximate; field measurements
+            continue to use the WGS84 ellipsoid. Clip accepts points/polygons;
+            intersection accepts polygons.</small
+          >
+          <button id="gis-terrain-open">
+            Terrain, slope & elevation tools
+          </button>
+        </section>
+        <section id="panel-print" class="panel" hidden>
+          <h2>Export map</h2>
+          <p>
+            Compose the current map with a title, legend, scale and source
+            credit.
+          </p>
+          <label
+            >Map title<input
+              id="gis-print-title"
+              value="Field survey map"
+              maxlength="160"
+          /></label>
+          <label
+            >Notes / source citation<textarea
+              id="gis-print-notes"
+              maxlength="2000"
+              rows="3"
+            ></textarea>
+          </label>
+          <label
+            >Reference for scale<select id="gis-scale-method">
+              <option value="center">Map center</option>
+              <option value="equator">Equator</option>
+              <option value="average">Average of top / center / bottom</option>
+              <option value="top">Top edge</option>
+              <option value="bottom">Bottom edge</option>
+            </select></label
+          >
+          <div id="gis-scale-readout" class="readout"></div>
+          <label class="check"
+            ><input id="gis-print-legend" type="checkbox" checked />Include
+            legend</label
+          >
+          <button id="gis-print-preview" class="primary">
+            Build print preview
+          </button>
+          <small
+            >Uses the current viewport resolution. Wait for tiles to finish
+            loading. Scale is unavailable for globe or tilted views; choose flat
+            north-up for a cartographic layout.</small
+          >
+        </section>
         <section id="panel-settings" class="panel" hidden>
           <h2>Display & field help</h2>
+          <label
+            >Map view<select id="gis-projection">
+              <option value="mercator">Flat map</option>
+              <option value="globe">3D Earth globe</option>
+            </select></label
+          ><small
+            >Globe uses Earth coordinates. Mars/Moon data require their own
+            planetary CRS and are not mixed with terrestrial survey
+            coordinates.</small
+          >
           <label
             >Primary coordinates<select id="primary-format">
               <option>DD</option>
@@ -572,6 +821,9 @@
         </section>
       </aside>
       <div id="map-column">
+        <div id="gis-mode-hint">
+          Pan to explore · Draw to mark · Layers to import
+        </div>
         <div id="map" aria-label="Interactive field map"></div>
         <div id="map-corner" aria-label="Position and orientation">
           <button
@@ -658,6 +910,19 @@
         </div>
       </div>
     </main>
+    <dialog id="gis-table-dialog">
+      <h2>Attribute table</h2>
+      <div id="gis-table-content"></div>
+      <button id="gis-table-close">Close table</button>
+    </dialog>
+    <dialog id="gis-print-dialog">
+      <div class="print-actions">
+        <button id="gis-print-close">Close</button
+        ><button id="gis-print-png">Download PNG</button
+        ><button id="gis-print-pdf">Print / Save as PDF</button>
+      </div>
+      <canvas id="gis-print-canvas"></canvas>
+    </dialog>
     <script>
       /* FSS_SCRIPTS */
     </script>

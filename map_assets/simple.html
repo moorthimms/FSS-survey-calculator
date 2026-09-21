@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>FSS Map</title>
+    <style>
+      /* VENDOR_CSS */
+    </style>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font: 14px system-ui;
+        color: #163c48;
+        background: #f0f5f6;
+      }
+      header {
+        background: #153c49;
+        color: white;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      header strong {
+        font-size: 20px;
+      }
+      select,
+      input,
+      button,
+      a.action {
+        font: inherit;
+        padding: 8px;
+        border: 1px solid #a7bec7;
+        border-radius: 6px;
+      }
+      button {
+        background: #fff;
+        cursor: pointer;
+        color: #163c48;
+      }
+      button[aria-pressed="true"] {
+        background: #137d83;
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      label {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
+      input {
+        min-width: 0;
+        max-width: 100%;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible,
+      select:focus-visible {
+        outline: 3px solid #efb745;
+      }
+      .bar {
+        padding: 9px 12px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        background: white;
+        border-bottom: 1px solid #d1dfe3;
+      }
+      #canvas {
+        position: relative;
+        height: 540px;
+      }
+      #map {
+        height: 100%;
+        width: 100%;
+      }
+      .corner {
+        position: absolute;
+        right: 10px;
+        bottom: 40px;
+        z-index: 1000;
+        display: flex;
+        gap: 5px;
+      }
+      .marker {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        background: transparent;
+        border: 0;
+        white-space: nowrap;
+        color: #133d4a;
+      }
+      .marker b {
+        background: white;
+        border: 2px solid #147d85;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        text-align: center;
+        line-height: 25px;
+        font-size: 19px;
+        box-shadow: 0 1px 5px #0004;
+      }
+      .marker span {
+        background: #fffffff2;
+        padding: 3px 6px;
+        border-radius: 4px;
+        font-size: 12px;
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #status,
+      #measurement,
+      #reference {
+        margin: 0;
+        padding: 8px 12px;
+        line-height: 1.5;
+      }
+      #measurement {
+        background: #dff0eb;
+        font-weight: 600;
+      }
+      #reference {
+        font-size: 12px;
+        white-space: pre-line;
+        max-height: 105px;
+        overflow: auto;
+      }
+      #status {
+        font-size: 13px;
+      }
+      .action {
+        display: inline-block;
+        color: #096e77;
+        background: #fff;
+        text-decoration: none;
+      }
+      details {
+        padding: 8px 12px;
+      }
+      small {
+        color: #47616c;
+      }
+      #marks {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        max-height: 90px;
+        overflow: auto;
+      }
+      .mark-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: #fff;
+        border: 1px solid #d4e0e3;
+        border-radius: 6px;
+        padding: 4px;
+      }
+      #provider-note {
+        padding: 6px 12px;
+        display: block;
+        font-size: 12px;
+      }
+      .leaflet-div-icon {
+        background: transparent;
+        border: 0;
+      }
+      @media (max-width: 600px) {
+        #canvas {
+          height: 460px;
+        }
+        .bar input {
+          width: 145px;
+        }
+        header select {
+          max-width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>FSS Map</strong
+      ><label
+        >Map<select id="provider">
+          <option value="soi">India topo · MapLibre</option>
+          <option value="vector">Vector streets · MapLibre</option>
+          <option value="leaflet">OpenStreetMap · Leaflet</option>
+          <optgroup label="Mapbox · token required">
+            <option value="mapbox-streets">Mapbox Streets</option>
+            <option value="mapbox-outdoors">Mapbox Outdoors</option>
+            <option value="mapbox-satellite">Mapbox Satellite</option>
+            <option value="mapbox-hybrid">Mapbox Hybrid</option>
+          </optgroup>
+        </select></label
+      ><label
+        ><input type="checkbox" id="labels" checked /> Marker labels</label
+      >
+    </header>
+    <div class="bar" aria-label="Map actions">
+      <button id="pan" aria-pressed="true">✋ Pan</button
+      ><button id="mark" aria-pressed="false">📍 Mark location</button
+      ><button id="measure" aria-pressed="false">↔ Measure A → B</button
+      ><label
+        >Label<input
+          id="name"
+          maxlength="80"
+          placeholder="Location name" /></label
+      ><label
+        >Symbol<select id="symbol">
+          <option value="pin">● Pin</option>
+          <option value="flag">⚑ Flag</option>
+          <option value="survey">⊕ Survey</option>
+          <option value="camp">▲ Camp</option>
+        </select></label
+      >
+    </div>
+    <div class="bar">
+      <label
+        >A / From<input
+          id="from"
+          placeholder="Latitude, longitude"
+          aria-label="From latitude longitude" /></label
+      ><label
+        >B / To<input
+          id="to"
+          placeholder="Latitude, longitude"
+          aria-label="To latitude longitude" /></label
+      ><button id="calculate">Measure</button><button id="swap">Swap ⇄</button
+      ><button id="directions">Driving directions</button
+      ><button id="clear">Clear A/B</button
+      ><a
+        id="navigate"
+        class="action"
+        href="https://www.google.com/maps/dir/"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Navigate ↗</a
+      >
+    </div>
+    <p id="measurement">
+      Choose Measure A → B, then tap two places. Distances follow the WGS84
+      ellipsoid.
+    </p>
+    <p id="status" role="status" aria-live="polite">Loading map…</p>
+    <div id="canvas">
+      <div id="map"></div>
+      <div class="corner">
+        <button id="own" title="Own position">◎ My location</button
+        ><button id="north" title="Face north">↑ N</button
+        ><button id="tilt" title="Toggle 3D terrain">3D</button>
+      </div>
+    </div>
+    <p id="reference">Move the cursor to see coordinates.</p>
+    <small id="provider-note"></small>
+    <details>
+      <summary>Saved locations <span id="count">0</span></summary>
+      <div id="marks"></div>
+      <button id="export">Download locations</button
+      ><small
+        >Saved on this browser. Downloads contain your markers only; maps and
+        route-provider data are excluded.</small
+      >
+    </details>
+    <details id="route-details" hidden>
+      <summary>Driving instructions</summary>
+      <p id="route-summary"></p>
+      <ol id="steps"></ol>
+      <small
+        >Route endpoints can snap to nearby roads. Route distance differs from
+        the direct A → B measurement.</small
+      >
+    </details>
+    <script>
+      /* SIMPLE_JS */
+    </script>
+  </body>
+</html>

@@ -55,19 +55,15 @@ def map_html():
 
 
 def render_map_workspace():
-    st.subheader('Map · Field workspace')
-    st.caption('Draw, organize layers, style, analyze and export. Mark, measure, record and navigate. Open the map tools below. GPS uses the device connected to this browser.')
+    st.subheader('Map')
     view = st.radio('Map workspace', ['Field workspace', 'Google Maps'], horizontal=True, key='map_engine')
     if view == 'Google Maps':
         from google_workspace import render_google_workspace
         render_google_workspace()
         return
-    with st.expander('Offline workspace and field guidance'):
-        st.download_button('Download offline map workspace', map_html(), 'fss-map.html', 'text/html', key='offline_map_app')
-        st.markdown('Open the downloaded HTML to use map tools without Streamlit. Import raster **MBTiles** and **HGT** terrain locally; export a project backup before changing devices. GPS and compass require browser permission and a secure context (HTTPS or localhost); support for local HTML varies by browser. Keep the map open while recording. Native Android A-GPS reset, battery permissions and background GPS are controlled by the operating system.')
+    from simple_map import simple_map_html
+    page = simple_map_html(map_config())
     if hasattr(st, "iframe"):
-        st.iframe(map_html(), height=900)
-    else:  # Compatibility with the existing Streamlit >=1.37 requirement.
-        components.html(map_html(), height=900, scrolling=True)
-    from gis_workbench import render_gis_workbench
-    render_gis_workbench()
+        st.iframe(page, height=980)
+    else:
+        components.html(page, height=980, scrolling=True)

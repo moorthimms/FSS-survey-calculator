@@ -1,3 +1,33 @@
+> **Current Map UI:** the compact map described below replaces the older Map tools sidebar, Field tools menu, numbered 1–5 toolbar and host GIS workbench on the active Map page. Later sections describe the retained legacy implementation and Google companion. Legacy calculator/grid definitions and saved legacy project data are not deleted.
+
+## Compact map: providers, markers, measurements and directions
+
+Use the single **Map** dropdown for India topo (default, MapLibre), vector streets (MapLibre / OpenFreeMap), OpenStreetMap (Leaflet), or Mapbox Streets, Outdoors, Satellite and Hybrid. The Google companion remains available through the Map workspace selector. The compact page has no old Map tools sidebar, Field tools menu or numbered task/settings panels.
+
+- **Mark location:** enter a label, choose pin/flag/survey/camp, then tap the map. Toggle **Marker labels** to show/hide text while symbols remain visible. Saved locations can be revisited, deleted or exported as GeoJSON. Up to 500 locations are stored separately in this browser; they survive provider changes. Legacy IndexedDB projects are retained but are not automatically imported into the new marker list.
+- **Measure A → B:** tap two places, or enter WGS84 decimal latitude, longitude in From/To and press Measure. GeographicLib computes ellipsoidal direct distance and the initial true bearing in each direction. Bearings are not magnetic or grid bearings. Coincident points explicitly have no bearing. The drawn geodesic is sampled; the numeric measurement uses the inverse ellipsoid calculation. No height/slope correction is applied.
+- **Driving directions:** request a road route between A and B. Orange is the road route; teal is the direct measurement. The route has its own distance, estimated time and instructions. Changes to endpoints invalidate previous/pending routes. **Navigate** opens Google Maps for turn-by-turn navigation; embedded route instructions are not a live navigation engine. Route service requests send endpoints to that provider.
+- **Corner buttons:** own position with device accuracy/height, north reset, and terrain/tilt for MapLibre or Mapbox. Leaflet remains a 2D map. Device location uses browser permissions and does not claim RTK accuracy. Cursor readouts retain WGS84 plus suggested DSM/Kalianpur references from existing verified definitions.
+
+### Provider setup and limits
+
+| Setting/provider | Behavior |
+| --- | --- |
+| `MAPBOX_PUBLIC_TOKEN` | Required for Mapbox maps and directions; use a URL-restricted public `pk.` token. Secret `sk.` tokens are not embedded. Current Mapbox map-load, terrain and Directions API pricing applies; no free-quota guarantee is hard-coded. |
+| `FSS_VECTOR_STYLE_URL` | Optional MapLibre style URL, default `https://tiles.openfreemap.org/styles/liberty`. The host is responsible for any credentials, sources and attribution required by a custom style. |
+| `FSS_ROUTING_URL` | OSRM-compatible driving Route API base, default `https://router.project-osrm.org/route/v1/driving`. Use a production/self-hosted endpoint for sustained use. The public demo has no availability guarantee. HTTPS and browser CORS support are required. |
+| Leaflet + OSM | Leaflet 1.9.4 is bundled with its license. Public OSM raster tiles require attribution and compliance with the tile usage policy; they are not unlimited free production hosting. No bulk/offline tile downloads are implemented in this page. |
+| MapLibre terrain | Tilezen/AWS Terrarium tiles; displayed with attribution. Visual terrain is not a measured survey height. |
+| Mapbox terrain | Mapbox terrain DEM via the official Mapbox GL JS SDK, loaded only when selected with a public token. |
+
+Mapbox GL JS 3.30.0 is loaded from the official CDN only when Mapbox is selected. MapLibre uses the existing bundled renderer. Failed provider/key/network requests are shown to the user; the app does not silently report another source as the selected map. Routing is click-triggered with a five-second request interval and a 20-second timeout. Google, map tiles and routed geometry are not included in marker exports.
+
+Automated checks cover removal of legacy controls from the active page, known WGS84 distance/bearing fixtures, marker text safety, label visibility, provider switching, keyless Mapbox rejection, route display and stale response cancellation. Streamlit switching and existing map bundle checks pass. Tests use renderer adapters: real browser WebGL, Leaflet tile loading, Mapbox account access, production route results and physical geolocation require deployment validation.
+
+Sources: [Leaflet download](https://leafletjs.com/download.html), [OpenStreetMap tile policy](https://operations.osmfoundation.org/policies/tiles/), [Mapbox pricing](https://www.mapbox.com/pricing), [Mapbox Directions](https://docs.mapbox.com/api/navigation/directions/), [MapLibre / OpenFreeMap](https://openfreemap.org/quick_start/), [OSRM Route API](https://project-osrm.org/docs/v5.24.0/api/).
+
+---
+
 # Map workspace and menu
 
 The feature discussions in `alpine.txt` are implemented as a browser mapping workspace under **Menu → Map**. All fourteen existing calculator, conversion, positioning and reference pages remain in the sidebar menu, giving fifteen pages in total. The original 33 zone identifiers and all existing conversion definitions are unchanged.

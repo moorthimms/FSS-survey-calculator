@@ -16,3 +16,5 @@ The unminified GeographicLib distribution is intentionally used. The initially d
 Map data, terrain data and imported files have their own provider licenses; these software licenses do not cover those datasets.
 
 Turf 7.2.0 (`turf.js`, MIT, `turf-LICENSE.txt`) supplies the bounded browser spatial analysis and point-on-feature labeling routines. Its distribution hash and upstream URL are recorded in the manifest.
+
+Leaflet 1.9.4 (`leaflet.js`, `leaflet.css`, BSD-2-Clause, `leaflet-LICENSE.txt`) is bundled for the compact OpenStreetMap view. It uses custom DOM symbols, so Leaflet default marker PNGs are not required. The manifest records upstream URLs and SHA-256 hashes.

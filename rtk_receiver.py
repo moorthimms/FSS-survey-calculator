@@ -84,7 +84,8 @@ class Rtcm3Frames:
 
 
 class LiveReceiver:
-    def __init__(self, port, baudrate=115200, ntrip=None, serial_factory=None):
+    def __init__(self, port, baudrate=115200, ntrip=None, serial_factory=None,
+                 transport="USB/Bluetooth serial", read_error=None):
         if not local_receiver_enabled():
             raise ValueError("Local receiver access is not enabled on this app installation.")
         if ntrip:
@@ -92,6 +93,7 @@ class LiveReceiver:
         if serial_factory is None:
             from serial import Serial
             serial_factory = Serial
+        self._read_error = read_error or "Receiver read failed. Check the cable, Bluetooth COM port and baud rate; reconnect."
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._measurements = ReceiverMeasurements()
@@ -104,6 +106,9 @@ class LiveReceiver:
             self._serial.close()
             raise
         self._state = {"connected": True, "receiver_error": None,
+                       "transport": transport, "started_at": time.time(),
+                       "rx_bytes": 0, "last_rx_at": None, "valid_gga": 0, "valid_gst": 0,
+                       "unsupported_lines": 0,
                        "ntrip_enabled": bool(ntrip),
                        "ntrip_status": "Waiting for rover GGA" if ntrip else "Receiver supplies its own corrections",
                        "rtcm_bytes": 0, "last_rtcm_at": None}
@@ -122,7 +127,8 @@ class LiveReceiver:
         self._heartbeat = time.monotonic()
         with self._lock:
             return {**self._state, "fix": self._measurements.snapshot(),
-                    "invalid_sentences": self._measurements.invalid_sentences}
+                    "invalid_sentences": self._measurements.invalid_sentences,
+                    "ignored_datagrams": getattr(self._serial, "ignored_datagrams", 0)}
 
     def _gga(self):
         with self._lock:
@@ -138,10 +144,18 @@ class LiveReceiver:
                 if time.monotonic() - self._heartbeat > 30:
                     self._set(receiver_error="Receiver disconnected after 30 seconds without an active app session.")
                     break
-                pending.extend(self._serial.read(min(max(self._serial.in_waiting, 1), 4096)))
-                while b"\n" in pending:
-                    raw, _, pending = pending.partition(b"\n")
-                    start = raw.find(b"$")
+                data = self._serial.read(min(max(self._serial.in_waiting, 1), 4096))
+                if data:
+                    with self._lock:
+                        self._state["rx_bytes"] = getattr(self._serial, "wire_bytes", self._state["rx_bytes"] + len(data))
+                        self._state["last_rx_at"] = time.time()
+                pending.extend(data)
+                # TCP/serial may split any byte. Accept CR, LF and CRLF framing.
+                while b"\n" in pending or b"\r" in pending:
+                    cuts = [i for i in (pending.find(b"\r"), pending.find(b"\n")) if i >= 0]
+                    end = min(cuts)
+                    raw, pending = pending[:end], pending[end + 1:]
+                    start = raw.rfind(b"$")
                     if start < 0:
                         continue
                     try:
@@ -150,12 +164,16 @@ class LiveReceiver:
                         continue
                     if len(line) >= 6 and line[3:6] in ("GGA", "GST"):
                         with self._lock:
-                            self._measurements.ingest(line)
+                            if self._measurements.ingest(line):
+                                self._state["valid_" + line[3:6].lower()] += 1
+                    else:
+                        with self._lock:
+                            self._state["unsupported_lines"] += 1
                 if len(pending) > 4096:
                     pending.clear()
         except Exception:
             if not self._stop.is_set():
-                self._set(receiver_error="Receiver read failed. Check the cable, Bluetooth COM port and baud rate; reconnect.")
+                self._set(receiver_error=self._read_error)
         finally:
             self.close(join=False)
 

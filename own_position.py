@@ -10,6 +10,7 @@ import streamlit_js_eval
 
 from gnss import quality_issues
 from rtk_receiver import LiveReceiver, NtripSettings, local_receiver_enabled
+from network_receiver import NetworkSettings, connect_network
 
 
 def gnss_dms(value, latitude):
@@ -163,13 +164,83 @@ def receiver_issues(snapshot, horizontal_limit, correction_limit):
     return issues
 
 
+def connection_diagnostic(snapshot, now=None):
+    """Distinguish transport, NMEA configuration and actual satellite fix failures."""
+    now = time.time() if now is None else now
+    if not snapshot.get("connected"):
+        return snapshot.get("receiver_error") or "Receiver transport is closed. Reconnect."
+    if not snapshot.get("rx_bytes", 0):
+        return "No receiver data received yet. For TCP check receiver server IP/port; for UDP set the receiver destination to this app computer's LAN IP and listening port. Enable NMEA output and allow this port through the local firewall."
+    stamp = snapshot.get("last_rx_at")
+    if stamp is not None and now - stamp > 5:
+        return "Receiver data has stopped. Check the Wi-Fi link and receiver output. Old coordinates are not a new position."
+    if not snapshot.get("valid_gga", 0):
+        return "Data is arriving, but no valid GGA position sentence. Enable checksummed NMEA GGA (and GST for uncertainty); RTCM-only, binary vendor output or RMC-only streams cannot supply this app's position fields."
+    fix = snapshot.get("fix")
+    if fix and fix.get("quality") == 0:
+        return "Receiver data is arriving, but the receiver reports no satellite fix. Check antenna connection and sky view."
+    if fix and not fix.get("fresh"):
+        return "Receiver GGA is stale. Check receiver UTC, output rate and the data link."
+    if fix and fix.get("quality") != 4:
+        return "Position data is arriving. RTK FIX has not been reported; check receiver correction status, antenna and satellite visibility."
+    return "NMEA position data is arriving. RTK FIX is receiver-reported; logging still checks freshness and uncertainty."
+
+
+def wifi_connection_form():
+    st.caption("Connect the app computer to the receiver Wi-Fi or the same LAN. The receiver must output NMEA GGA/GST; a Wi-Fi connection alone does not deliver coordinates.")
+    enabled = local_receiver_enabled()
+    if not enabled:
+        st.info("This hosted server cannot reach a receiver on your iPhone's Wi-Fi. Run this app on a trusted computer on the receiver network, then open that local app from your phone. Setting an IP here does not make the cloud server join your Wi-Fi.")
+        st.caption("Local setup: set FSS_ENABLE_LOCAL_GNSS=1 on that computer. For a phone-only connection, the receiver model and supported browser/native protocol are required; raw TCP/UDP cannot be read directly by this hosted web page.")
+    protocol = st.radio("Wi-Fi receiver protocol", ["TCP", "UDP"], key="wifi_protocol", horizontal=True)
+    st.caption("TCP: app connects to the receiver's NMEA server. UDP: receiver sends NMEA to this computer; the port below is the receiver's configured destination port." if protocol == "UDP" else "TCP: enter the receiver's NMEA server address and port from its configuration, not the NTRIP caster port or receiver web-page port.")
+    forward = protocol == "TCP" and st.checkbox("Receiver accepts RTCM3 correction input on this same TCP connection", key="wifi_bidirectional")
+    use_ntrip = forward and st.checkbox("Forward NTRIP corrections through this app", key="wifi_use_ntrip")
+    with st.form("wifi_connection"):
+        ip = st.text_input("Receiver Wi-Fi IPv4 address", placeholder="From receiver network settings", key="wifi_ip")
+        port = st.number_input("NMEA TCP port" if protocol == "TCP" else "UDP listening port on app computer", min_value=1, max_value=65535, value=None, key="wifi_port")
+        bind = st.text_input("App computer UDP bind address", value="0.0.0.0", disabled=protocol != "UDP", key="wifi_bind")
+        st.caption("For UDP, enter the computer's LAN IP as the destination in the receiver settings. 0.0.0.0 is a local listening address, not a receiver destination. Datagrams from other receiver IPs are ignored.")
+        if use_ntrip:
+            host = st.text_input("NTRIP caster hostname", key="wifi_caster")
+            caster_port = st.number_input("NTRIP port", min_value=1, max_value=65535, value=443, key="wifi_caster_port")
+            mount = st.text_input("NTRIP mountpoint", key="wifi_mount")
+            tls = st.checkbox("Use TLS (HTTPS)", value=True, key="wifi_tls")
+            username = st.text_input("NTRIP username", key="wifi_user")
+            password = st.text_input("NTRIP password", type="password", key="wifi_password")
+            st.caption("NTRIP v2 / RTCM3 only. Plain HTTP exposes caster credentials. The app computer also needs a route to the caster; receiver hotspot Wi-Fi may have no internet.")
+        else:
+            st.caption("Receiver supplies its own corrections. UDP here is receive-only; no corrections are sent to an inferred UDP address.")
+        if st.form_submit_button("Connect Wi-Fi receiver", disabled=not enabled):
+            try:
+                settings = NetworkSettings(protocol, ip.strip(), int(port) if port is not None else 0, bind.strip(), bool(forward))
+                ntrip = NtripSettings(host.strip(), int(caster_port), mount.strip(), username, password, tls) if use_ntrip else None
+                st.session_state["live_receiver"] = connect_network(settings, ntrip)
+                st.session_state["live_receiver_source"] = "wifi"
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+            except Exception:
+                st.error("Could not open Wi-Fi transport. TCP: check receiver IP/port and server mode. UDP: check this computer's bind IP/port and whether another app is using it. Both devices must share a reachable network.")
+
+
 @st.fragment(run_every=1)
-def render_external(display_coordinates):
+def render_external(display_coordinates, wifi=False):
+    expected_source = "wifi" if wifi else "serial"
+    if st.session_state.get("live_receiver_source", expected_source) != expected_source:
+        previous = st.session_state.pop("live_receiver", None)
+        if previous:
+            previous.close()
+        st.session_state.pop("live_receiver_source", None)
     if not local_receiver_enabled():
-        st.info("Live serial mode requires this app to run on the computer connected to your RTK receiver. The hosted server cannot access your phone or computer's Bluetooth port.")
+        if wifi:
+            wifi_connection_form()
+            return
+        st.info("Live serial mode requires this app to run on the computer connected to your RTK receiver. The hosted server cannot access your phone or computer's Bluetooth port. For a Wi-Fi receiver, select External RTK receiver (Wi-Fi TCP/UDP) above.")
         st.caption("For local setup, follow the RTK section in README: pair USB/Bluetooth COM, enable FSS_ENABLE_LOCAL_GNSS=1, then run Streamlit. For direct Android/iPhone support, the receiver model and its connection protocol are needed.")
         return
-    st.caption("Use a receiver configured to output checksummed NMEA GGA and GST at 1 Hz or faster. Correction input must accept RTCM3 on this same serial port. The receiver computes RTK; the app forwards corrections and displays its measurements.")
+    if not wifi:
+        st.caption("Use a receiver configured to output checksummed NMEA GGA and GST at 1 Hz or faster. Correction input must accept RTCM3 on this same serial port. The receiver computes RTK; the app forwards corrections and displays its measurements.")
     receiver = st.session_state.get("live_receiver")
     snapshot = receiver.snapshot() if receiver else None
     if not receiver or not snapshot["connected"]:
@@ -178,6 +249,9 @@ def render_external(display_coordinates):
                 st.warning(snapshot["receiver_error"])
             receiver.close()
             st.session_state.pop("live_receiver", None)
+        if wifi:
+            wifi_connection_form()
+            return
         from serial.tools.list_ports import comports
         ports = [port.device for port in comports()]
         st.caption("Detected serial ports: " + (", ".join(ports) or "none; pair the receiver first or enter its port"))
@@ -199,6 +273,7 @@ def render_external(display_coordinates):
                     if not port.strip():
                         raise ValueError("Receiver serial port is required.")
                     st.session_state["live_receiver"] = LiveReceiver(port.strip(), baud, settings)
+                    st.session_state["live_receiver_source"] = "serial"
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))
@@ -209,6 +284,11 @@ def render_external(display_coordinates):
         receiver.close()
         st.session_state.pop("live_receiver", None)
         st.rerun()
+    st.write(f"**Transport:** {snapshot.get('transport', 'USB/Bluetooth serial')} · " + ("Listening for receiver datagrams" if snapshot.get('transport') == 'Wi-Fi UDP' else "Open"))
+    if "rx_bytes" in snapshot:
+        st.info(connection_diagnostic(snapshot))
+        age = "none" if snapshot.get("last_rx_at") is None else f"{max(0, time.time() - snapshot['last_rx_at']):.1f} s ago"
+        st.caption(f"Received bytes: {snapshot['rx_bytes']} · last data: {age} · valid GGA: {snapshot.get('valid_gga', 0)} · valid GST: {snapshot.get('valid_gst', 0)} · other NMEA: {snapshot.get('unsupported_lines', 0)} · ignored UDP senders: {snapshot.get('ignored_datagrams', 0)}")
     st.write(f"**Correction link:** {snapshot['ntrip_status']}")
     st.caption(f"RTCM3 bytes forwarded: {snapshot['rtcm_bytes']}; rejected GGA/GST sentences: {snapshot['invalid_sentences']}")
     if snapshot["last_rtcm_at"] is not None:
@@ -261,11 +341,11 @@ def render_external(display_coordinates):
 
 
 def render_own_position(display_coordinates):
-    source = st.radio("Position source", ["Phone / browser", "External RTK receiver (local USB/Bluetooth)"], key="position_source")
+    source = st.radio("Position source", ["Phone / browser", "External RTK receiver (local USB/Bluetooth)", "External RTK receiver (Wi-Fi TCP/UDP)"], key="position_source")
     if source == "Phone / browser":
         receiver = st.session_state.pop("live_receiver", None)
         if receiver:
             receiver.close()
         render_browser(display_coordinates)
     else:
-        render_external(display_coordinates)
+        render_external(display_coordinates, wifi=source.endswith("(Wi-Fi TCP/UDP)"))

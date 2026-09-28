@@ -46,14 +46,15 @@ npm test
 
 ## Own Position and RTK
 
-Own Position offers two sources:
+Own Position offers three sources:
 
 | Source | What it provides | Where it runs |
 | --- | --- | --- |
 | Phone / browser | A fresh location snapshot, automatic height when reported, and separate horizontal/vertical accuracy; a scan takes up to 15 seconds | Hosted app over HTTPS, or localhost |
-| External RTK receiver | Live NMEA position, FIX/FLOAT state, satellite count, HDOP, correction age, same-epoch GST uncertainty, optional NTRIP forwarding and point logging | App running on the computer physically connected to the receiver's USB or Bluetooth serial port |
+| External RTK receiver (USB/Bluetooth) | Live NMEA position, FIX/FLOAT state, satellite count, HDOP, correction age, same-epoch GST uncertainty, optional NTRIP forwarding and point logging | App running on the computer physically connected to the receiver's USB or Bluetooth serial port |
+| External RTK receiver (Wi-Fi TCP/UDP) | The same NMEA positions, heights, quality checks and logging over TCP client or UDP receive; optional confirmed bidirectional TCP RTCM forwarding | App computer on the receiver network; the cloud app cannot reach a phone-local receiver |
 
-**The hosted Streamlit server cannot read a Bluetooth receiver attached to a visitor's phone or computer.** This integration uses a local USB/serial or Bluetooth Classic COM connection, not a browser Bluetooth API. Direct Android/iPhone BLE or proprietary receiver integration requires the actual receiver model and protocol; it is not implemented by this change. Browser location never gets relabelled RTK from a small accuracy number.
+**The hosted Streamlit server cannot read a Bluetooth receiver attached to a visitor's phone or computer.** Serial mode uses a local USB/serial or Bluetooth Classic COM connection, not a browser Bluetooth API. Wi-Fi mode opens sockets on the app computer, not in the phone browser. Direct Android/iPhone BLE or proprietary receiver integration requires the actual receiver model and protocol; it is not implemented by this change. Browser location never gets relabelled RTK from a small accuracy number.
 
 ### Automatic height
 
@@ -82,6 +83,22 @@ Live receiver mode displays **MSL height**, **ellipsoidal height**, and **GST ve
 5. The app waits for a fresh rover GGA, supplies it in the initial caster request and sends updated rover GGA approximately every 10 seconds while corrections flow. It verifies RTCM3 frame CRCs and forwards the bytes to the rover. The **receiver**, not the app or phone, performs ambiguity resolution and computes the RTK solution. A stream error stops forwarding and requests reconnection; it does not manufacture a FIX.
 
 Credentials are used in the local session and are not written to project files or point exports. Disconnect closes the receiver and correction connection. An abandoned session releases the receiver after approximately 30 seconds without an app heartbeat. The receiver screen refreshes every second while the session is active. Keep the computer clock synchronized to UTC for freshness checks.
+
+### Wi-Fi receiver setup (TCP / UDP)
+
+The screenshot's USB/Bluetooth option does not read a Wi-Fi receiver. Select **Own Position → External RTK receiver (Wi-Fi TCP/UDP)**. This integration supports NMEA over IPv4 TCP or UDP, not a receiver web page, raw RTCM position output, proprietary binary protocols, or an automatic connection to any nearby receiver.
+
+1. Connect a trusted computer to the receiver's Wi-Fi hotspot or the same reachable LAN. Verify the receiver's IP address, NMEA output port, and TCP/UDP mode in its configuration utility. Do not guess the port or use its web-interface/NTRIP port. Configure checksummed GGA and GST at 1 Hz or faster. A computer may need a separate internet connection if the receiver hotspot cannot reach an NTRIP caster.
+2. Run the local app with `FSS_ENABLE_LOCAL_GNSS=1` as in the serial setup above. For use on that computer, keep `--server.address 127.0.0.1`. For an iPhone on the same trusted private LAN, bind Streamlit to **the computer's LAN interface IP** instead, then open `http://COMPUTER_LAN_IP:8501` on the phone. This is the local app address, not the `streamlit.app` cloud URL and not the receiver IP. Allow only the intended private-network app/receiver ports through the computer firewall. Do not expose this opt-in hardware-controlling installation to the internet or an untrusted/shared network. Browser-phone geolocation may require HTTPS; external receiver NMEA is read on the local computer.
+3. **TCP:** enable the receiver's TCP server/NMEA output. Enter its device IP and NMEA port. The app is the TCP client; receiver-as-TCP-client/push mode is not supported. A connected TCP socket with zero received bytes does not mean a GNSS signal has been acquired.
+4. **UDP:** set the receiver's output destination to the computer's LAN IP and a chosen UDP destination port. In the app enter the receiver IP as the accepted sender, and the same port as **UDP listening port**. Bind address `0.0.0.0` means listen on the app computer's interfaces; never use that address as the receiver's destination. Datagrams from other sender IPs are ignored. Another program cannot simultaneously own the same UDP port. Complete checksummed single-sentence UDP packets also work without a trailing CR/LF.
+5. Leave app correction forwarding off when the receiver manages corrections itself. UDP is receive-only. TCP forwards NTRIP RTCM3 only after explicitly confirming that **this same TCP connection** accepts correction input; a different receiver correction port requires model-specific integration. Merely connecting Wi-Fi does not supply RTK corrections or guarantee RTK FIX.
+
+The screen now reports transport type, received byte count, last data age, valid GGA/GST counts and checksum rejections. Zero bytes means a link/output configuration issue. Bytes without valid GGA point to wrong output format or damaged NMEA. Valid GGA with quality 0 means the receiver has no satellite fix. FLOAT/standalone means coordinates are arriving but the receiver has not reported RTK FIX. Existing freshness, uncertainty, datum and logging checks remain unchanged. Stream closure and source changes release the socket. There is no silent retry that keeps an old FIX looking current.
+
+**Phone-only use of the cloud URL:** the phone being on receiver Wi-Fi does not put the cloud server on that LAN. Safari cannot open arbitrary raw TCP/UDP receiver sockets. A native vendor app or a supported, trusted receiver/bridge web protocol is needed for that topology; supply the receiver make/model and Wi-Fi output settings to determine the exact path. Do not disable browser security or expose the receiver publicly as a workaround.
+
+Validation uses real loopback TCP/UDP sockets, fragmented CR/LF NMEA, datagrams without terminators, wrong-sender filtering, invalid checksums, no-fix and disconnect events, and byte-exact synthetic RTCM forwarding through a local HTTP caster into TCP. Serial/NTRIP regression and Streamlit connection-controls tests also run. These tests do not replace commissioning against the physical receiver and actual Wi-Fi network.
 
 ### Status and logging limits
 

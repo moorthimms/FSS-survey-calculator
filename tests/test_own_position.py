@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
-from own_position import browser_coordinates, gnss_dms
+from own_position import browser_coordinates, gnss_dms, connection_diagnostic
 
 
 APP = str(Path(__file__).resolve().parents[1] / "app.py")
@@ -222,6 +222,42 @@ class OwnPositionAppTests(unittest.TestCase):
         labeled(self.app.button, "Disconnect receiver").click().run()
         self.assertFalse(self.app.exception)
         self.assertTrue(receiver.closed)
+
+
+    def test_wifi_option_on_cloud_explains_local_network_and_disables_connect(self):
+        with patch.dict(os.environ, {"FSS_ENABLE_LOCAL_GNSS": "0"}), patch("own_position.connect_network") as connect:
+            self.app.radio("position_source").set_value("External RTK receiver (Wi-Fi TCP/UDP)").run()
+            self.assertFalse(self.app.exception)
+            self.assertTrue(labeled(self.app.button, "Connect Wi-Fi receiver").disabled)
+            self.assertTrue(any("iPhone's Wi-Fi" in x.value for x in self.app.info))
+            connect.assert_not_called()
+
+    @patch.dict(os.environ, {"FSS_ENABLE_LOCAL_GNSS": "1"})
+    def test_wifi_tcp_connect_uses_ip_port_and_switching_source_closes_it(self):
+        self.app.radio("position_source").set_value("External RTK receiver (Wi-Fi TCP/UDP)").run()
+        self.app.text_input("wifi_ip").input("192.168.4.1")
+        self.app.number_input("wifi_port").set_value(9000)
+        receiver = FakeReceiver()
+        with patch("own_position.connect_network", return_value=receiver) as connect:
+            labeled(self.app.button, "Connect Wi-Fi receiver").click().run()
+            settings, ntrip = connect.call_args.args
+            self.assertEqual((settings.protocol, settings.receiver_ip, settings.port), ("TCP", "192.168.4.1", 9000))
+            self.assertIsNone(ntrip)
+        self.assertFalse(self.app.exception)
+        self.app.radio("position_source").set_value(EXTERNAL).run()
+        self.assertTrue(receiver.closed)
+        self.assertNotIn("live_receiver", self.app.session_state)
+
+    def test_diagnostics_distinguish_link_stream_and_satellite_fix(self):
+        s={"connected":True,"rx_bytes":0,"fix":None}
+        self.assertIn("No receiver data",connection_diagnostic(s))
+        s.update(rx_bytes=100,last_rx_at=100,valid_gga=0)
+        self.assertIn("no valid GGA",connection_diagnostic(s,now=100))
+        self.assertIn("has stopped",connection_diagnostic(s,now=106))
+        s.update(valid_gga=1,fix={"quality":0})
+        self.assertIn("no satellite fix",connection_diagnostic(s,now=100))
+        s["fix"]={"quality":5,"fresh":True}
+        self.assertIn("RTK FIX has not",connection_diagnostic(s,now=100))
 
 
 if __name__ == "__main__":

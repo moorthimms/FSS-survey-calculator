@@ -11,6 +11,7 @@ import streamlit_js_eval
 from gnss import quality_issues
 from rtk_receiver import LiveReceiver, NtripSettings, local_receiver_enabled
 from network_receiver import NetworkSettings, connect_network
+from tmm_ui import render_tmm
 
 
 def gnss_dms(value, latitude):
@@ -129,6 +130,9 @@ def browser_coordinates(location, now=None):
 
 def render_browser(display_coordinates):
     st.caption("Requests browser location and height for up to 15 seconds, preferring a complete 3D sample when available. Metre or centimetre accuracy is not guaranteed; this does not apply RTK corrections.")
+    with st.expander("Using Trimble R12 through phone location sharing"):
+        st.write("Android: connect R12 in Trimble Mobile Manager, configure corrections, select TMM as the mock location app and disable its battery optimization. iPhone: TMM/R12 can share location through iOS, but iOS reports accuracy no better than 5 m and does not apply TMM output transformations on this path. Verify the feed on your phone.")
+        st.caption("This browser mode cannot verify the receiver identity, FIX/FLOAT or fallback to internal GPS. Select Trimble R12 / Mobile Manager for receiver metadata via its secure API.")
     if not st.checkbox("Get Own Position", key="get_pos_checkbox"):
         return
     if st.button("Refresh position", key="refresh_browser_position"):
@@ -191,7 +195,7 @@ def wifi_connection_form():
     enabled = local_receiver_enabled()
     if not enabled:
         st.info("This hosted server cannot reach a receiver on your iPhone's Wi-Fi. Run this app on a trusted computer on the receiver network, then open that local app from your phone. Setting an IP here does not make the cloud server join your Wi-Fi.")
-        st.caption("Local setup: set FSS_ENABLE_LOCAL_GNSS=1 on that computer. For a phone-only connection, the receiver model and supported browser/native protocol are required; raw TCP/UDP cannot be read directly by this hosted web page.")
+        st.caption("Local setup: set FSS_ENABLE_LOCAL_GNSS=1 on that computer. For R12 phone-only use, select Trimble R12 / Mobile Manager. Raw TCP/UDP cannot be read directly by this hosted web page.")
     protocol = st.radio("Wi-Fi receiver protocol", ["TCP", "UDP"], key="wifi_protocol", horizontal=True)
     st.caption("TCP: app connects to the receiver's NMEA server. UDP: receiver sends NMEA to this computer; the port below is the receiver's configured destination port." if protocol == "UDP" else "TCP: enter the receiver's NMEA server address and port from its configuration, not the NTRIP caster port or receiver web-page port.")
     forward = protocol == "TCP" and st.checkbox("Receiver accepts RTCM3 correction input on this same TCP connection", key="wifi_bidirectional")
@@ -237,7 +241,7 @@ def render_external(display_coordinates, wifi=False):
             wifi_connection_form()
             return
         st.info("Live serial mode requires this app to run on the computer connected to your RTK receiver. The hosted server cannot access your phone or computer's Bluetooth port. For a Wi-Fi receiver, select External RTK receiver (Wi-Fi TCP/UDP) above.")
-        st.caption("For local setup, follow the RTK section in README: pair USB/Bluetooth COM, enable FSS_ENABLE_LOCAL_GNSS=1, then run Streamlit. For direct Android/iPhone support, the receiver model and its connection protocol are needed.")
+        st.caption("For local setup, follow the RTK section in README: pair USB/Bluetooth COM, enable FSS_ENABLE_LOCAL_GNSS=1, then run Streamlit. For R12 on Android/iPhone, select Trimble R12 / Mobile Manager.")
         return
     if not wifi:
         st.caption("Use a receiver configured to output checksummed NMEA GGA and GST at 1 Hz or faster. Correction input must accept RTCM3 on this same serial port. The receiver computes RTK; the app forwards corrections and displays its measurements.")
@@ -341,11 +345,18 @@ def render_external(display_coordinates, wifi=False):
 
 
 def render_own_position(display_coordinates):
-    source = st.radio("Position source", ["Phone / browser", "External RTK receiver (local USB/Bluetooth)", "External RTK receiver (Wi-Fi TCP/UDP)"], key="position_source")
-    if source == "Phone / browser":
+    source = st.radio("Position source", ["Phone / browser", "Trimble R12 / Mobile Manager", "External RTK receiver (local USB/Bluetooth)", "External RTK receiver (Wi-Fi TCP/UDP)"], key="position_source")
+    if source != "Trimble R12 / Mobile Manager":
+        st.session_state.pop("tmm_nonce", None)
+        st.session_state.pop("tmm_record_result", None)
+    if source in ("Phone / browser", "Trimble R12 / Mobile Manager"):
         receiver = st.session_state.pop("live_receiver", None)
         if receiver:
             receiver.close()
-        render_browser(display_coordinates)
+        st.session_state.pop("live_receiver_source", None)
+        if source == "Trimble R12 / Mobile Manager":
+            render_tmm(display_coordinates)
+        else:
+            render_browser(display_coordinates)
     else:
         render_external(display_coordinates, wifi=source.endswith("(Wi-Fi TCP/UDP)"))

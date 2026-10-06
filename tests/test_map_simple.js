@@ -274,3 +274,47 @@ test("driving route is distinct from direct measurement and stale replies are ig
     n.close();
   }
 });
+
+test("My location creates one blue marker, updates it and survives provider switching", async () => {
+  const t = await setup();
+  try {
+    let p = [80.2, 29.6];
+    Object.defineProperty(t.w.navigator, 'geolocation', {value: {
+      getCurrentPosition(ok) { ok({coords:{longitude:p[0],latitude:p[1],accuracy:4,altitude:1200}, timestamp:Date.now()}); }
+    }});
+    const own = () => t.state.markers.filter(m => !m.removed && m.element.classList.contains('own-position'));
+    await t.click('own');
+    assert.equal(own().length, 1);
+    assert.deepEqual(Array.from(own()[0].p), p);
+    assert.equal(own()[0].element.textContent, '●My location');
+    assert.deepEqual(Array.from(t.state.maps.at(-1).center), p);
+    p = [80.3,29.7];
+    await t.click('own');
+    assert.equal(own().length, 1);
+    assert.deepEqual(Array.from(own()[0].p), p);
+    await t.change('provider','leaflet');
+    assert.equal(own().length, 1);
+    t.$('labels').checked = false;
+    t.$('labels').dispatchEvent(new t.w.Event('change'));
+    assert.equal(own()[0].element.querySelector('span').hidden, true);
+    assert.equal(t.$('count').textContent, '0');
+  } finally { t.close(); }
+});
+
+test("My location permission errors and invalid fixes do not create a marker", async () => {
+  const t = await setup();
+  try {
+    let denied = true;
+    Object.defineProperty(t.w.navigator, 'geolocation', {value: {
+      getCurrentPosition(ok, fail) {
+        if (denied) fail({message:'Permission denied'});
+        else ok({coords:{longitude:80,latitude:100,accuracy:4},timestamp:Date.now()});
+      }
+    }});
+    await t.click('own');
+    assert.match(t.$('status').textContent, /Permission denied/);
+    denied = false;
+    await t.click('own');
+    assert.equal(t.state.markers.filter(m=>!m.removed).length, 0);
+  } finally { t.close(); }
+});

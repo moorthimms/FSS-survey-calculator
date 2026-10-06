@@ -13,6 +13,7 @@
     b = null,
     route = null,
     marks = [],
+    ownPosition = null,
     rendered = [],
     overlay,
     provider = "soi",
@@ -164,7 +165,8 @@
   }
   function elements(m) {
     const el = document.createElement("div");
-    el.className = "marker";
+    el.className = m.own ? "marker own-position" : "marker";
+    if (m.own) el.setAttribute("aria-label", "My location");
     const icon = document.createElement("b");
     icon.textContent = symbols[m.symbol] || m.symbol || "●";
     const label = document.createElement("span");
@@ -177,6 +179,7 @@
   function allMarkers() {
     return [
       ...marks,
+      ...(ownPosition ? [{ p: ownPosition, name: "My location", symbol: "●", own: true }] : []),
       ...(a ? [{ p: a, name: "A / From", symbol: "A" }] : []),
       ...(b ? [{ p: b, name: "B / To", symbol: "B" }] : []),
     ];
@@ -602,13 +605,19 @@
         status("Finding your position…");
         navigator.geolocation.getCurrentPosition(
           (pos) => {
-            const c = pos.coords,
-              p = [c.longitude, c.latitude];
-            fly(p);
-            status(
-              `Device position · accuracy ±${c.accuracy.toFixed(1)} m · height ${Number.isFinite(c.altitude) ? c.altitude.toFixed(1) + " m (device datum)" : "unavailable"}`,
-            );
-            resolve();
+            try {
+              const c = pos.coords;
+              if (![c.longitude, c.latitude, c.accuracy, pos.timestamp].every(Number.isFinite)
+                  || c.accuracy < 0 || Math.abs(Date.now() - pos.timestamp) > 30000)
+                throw Error("No fresh valid location received. Please try again.");
+              ownPosition = C.coord([c.longitude, c.latitude]);
+              draw();
+              fly(ownPosition);
+              status(
+                `My location marked · accuracy ±${c.accuracy.toFixed(1)} m · height ${Number.isFinite(c.altitude) ? c.altitude.toFixed(1) + " m (device datum)" : "unavailable"}`,
+              );
+              resolve();
+            } catch (e) { reject(e); }
           },
           (e) => reject(Error("Location unavailable: " + e.message)),
           { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },

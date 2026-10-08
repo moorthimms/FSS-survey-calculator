@@ -523,7 +523,7 @@
           <label
             >Elevation source<select id="terrain-source">
               <option value="none">Off</option>
-              <option value="hgt">Imported HGT · offline</option>
+              <option value="hgt">Imported HGT / XYZ · offline</option>
               <option value="online">AWS Terrarium · online</option>
             </select></label
           ><label
@@ -534,6 +534,17 @@
               accept=".hgt"
           /></label>
           <div id="hgt-list" class="readout">No HGT data loaded.</div>
+          <details>
+            <summary>Import XYZ elevation grid</summary>
+            <p>Load a regular rectangular grid with three columns: X Y Z. Import replaces the current local terrain. Reproject other coordinate systems before loading.</p>
+            <label class="check"><input id="xyz-wgs84" type="checkbox" />I confirm X/Y are WGS84 longitude/latitude degrees</label>
+            <label>Z units<select id="xyz-units"><option value="">Choose source units</option><option value="metres">Metres</option><option value="feet">International feet</option></select></label>
+            <label>Vertical datum / source reference<input id="xyz-reference" maxlength="160" placeholder="e.g. EGM96, or unspecified source datum" /></label>
+            <label>No-data value (blank preserves all heights)<input id="xyz-nodata" placeholder="e.g. -9999; enter 0 only if documented as missing" /></label>
+            <label>XYZ file<input id="xyz-file" type="file" accept=".xyz,.txt,.csv" /></label>
+            <button id="import-xyz">Load XYZ terrain</button>
+            <small>Up to 1,000,000 cells / 40 MB. No vertical datum conversion. Zero is a valid height unless you explicitly mark it as no-data. Keep the original file for backups.</small>
+          </details>
           <label class="check"
             ><input id="terrain-3d" type="checkbox" /> 3D terrain relief</label
           ><label class="check"
@@ -541,10 +552,10 @@
             overlay</label
           ><label class="check"
             ><input id="terrain-colors" type="checkbox" /> Terrain elevation
-            colors (HGT)</label
+            colors (local DEM)</label
           ><label class="check"
             ><input id="slope-layer" type="checkbox" /> Slope colors
-            (HGT)</label
+            (local DEM)</label
           ><label
             >Vertical exaggeration<input
               id="exaggeration"
@@ -558,13 +569,24 @@
           <div id="terrain-readout" class="readout">
             Ground elevation unavailable.
           </div>
+          <details>
+            <summary>Terrain profile along a saved route</summary>
+            <p>Select a saved line in Landmarks, then sample the imported terrain. A new line with heights is added; the original stays unchanged.</p>
+            <label>Sample spacing (metres)<input id="terrain-profile-spacing" type="number" min="1" max="1000" value="20" /></label>
+            <button id="terrain-profile-create">Create local terrain profile</button>
+            <small>At most 5,000 samples. Missing coverage stops the calculation. Sample spacing does not improve source resolution.</small>
+          </details>
+          <details>
+            <summary>SAAS / Skyline MPT files</summary>
+            <p>MPT and FLY are not browser map formats. Publish MPT with a compatible SkylineGlobe Server and add its WMS imagery under Layers &amp; data, or export supported raster/vector/DEM data with the original software. WMS imagery is not an elevation model. A Drive folder link cannot serve terrain tiles.</p>
+          </details>
           <small
             >HGT ground elevation uses the source DEM's vertical datum (usually
             EGM96 for SRTM), not GPS antenna height. Voids remain unavailable in
             readouts; uncovered areas render flat in the terrain mesh. Online
             terrain loads on demand while enabled and is cached in this browser,
             subject to storage limits. Terrain colors and slope require
-            HGT.</small
+            an imported local DEM. XYZ uses your specified source vertical reference.</small
           >
         </section>
         <section id="panel-style" class="panel" hidden>

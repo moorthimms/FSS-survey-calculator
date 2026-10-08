@@ -1,4 +1,4 @@
-> **Current Map UI:** the compact map described below replaces the older Map tools sidebar, Field tools menu, numbered 1–5 toolbar and host GIS workbench on the active Map page. Later sections describe the retained legacy implementation and Google companion. Legacy calculator/grid definitions and saved legacy project data are not deleted.
+> **Current Map UI:** the compact **Field workspace** remains the default. Choose **Advanced GIS / 3D** in the workspace selector to access the detailed tools and host GIS workbench described below. The Google companion remains separate. Saved data stays in its original workspace; transfer compact markers through GeoJSON export/import. See [SAAS / QGIS integration](saas-map-integration.md) for supported imports and remaining native-engine features.
 
 ## Compact map: providers, markers, measurements and directions
 

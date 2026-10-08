@@ -18,3 +18,16 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertFalse(list(app.exception))
         app.radio('map_engine').set_value('Field workspace').run()
         self.assertFalse(list(app.exception))
+
+    def test_advanced_map_and_file_workbench_are_reachable_without_changing_default(self):
+        app=AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py'),default_timeout=30).run()
+        app.radio('app_menu').set_value('Map').run()
+        self.assertEqual(app.radio('map_engine').value,'Field workspace')
+        self.assertFalse(any(x.key=='gis_data_task' for x in app.selectbox))
+        app.radio('map_engine').set_value('Advanced GIS / 3D').run()
+        self.assertFalse(list(app.exception))
+        self.assertIn('Shapefile components',app.selectbox('gis_data_task').options)
+        app.selectbox('gis_data_task').set_value('SAAS / MPT migration').run()
+        self.assertFalse(list(app.exception))
+        app.radio('map_engine').set_value('Field workspace').run()
+        self.assertFalse(list(app.exception))

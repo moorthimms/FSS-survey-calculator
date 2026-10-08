@@ -258,6 +258,7 @@ async function setup(storage = new IDBFactory()) {
     "vendor/turf.js",
     "core.js",
     "files.js",
+    "dem.js",
     "advanced-core.js",
     "advanced.js",
     "app.js",
@@ -433,6 +434,43 @@ test("unsupported DSM and unavailable offline / elevation sources report errors"
   } finally {
     t.close();
   }
+});
+test("XYZ terrain import requires confirmation, produces a profile, and restores offline", async () => {
+  const storage = new IDBFactory();
+  let t = await setup(storage);
+  try {
+    const text = '78 30 0\n78.01 30 10\n78 30.01 20\n78.01 30.01 30';
+    Object.defineProperty(t.$('xyz-file'), 'files', { value: [{ name: 'test.xyz', size: text.length, text: async () => text }] });
+    await t.click('import-xyz');
+    assert.match(t.$('message').textContent, /Confirm/);
+    t.$('xyz-wgs84').checked = true;
+    t.$('xyz-units').value = 'metres';
+    await t.click('import-xyz');
+    assert.match(t.$('hgt-list').textContent, /2 × 2/);
+    assert.equal(t.$('terrain-source').value, 'hgt');
+    assert.match(t.$('terrain-readout').textContent, /15.0 m/);
+    t.$('terrain-3d').checked = true;
+    await t.click('apply-terrain');
+    assert.equal(t.map.terrain.source, 'dem');
+    await t.click('tool-line');
+    t.map.center = [78.001, 30.001]; await t.click('add-center');
+    t.map.center = [78.009, 30.009]; await t.click('add-center');
+    await t.click('save-drawing');
+    t.$('landmark-list').querySelector('button').click();
+    await t.click('terrain-profile-create');
+    assert.match(t.$('message').textContent, /profile created/);
+    assert.equal(t.map.sources.landmarks.data.features.length, 2);
+    assert.equal(t.$('profile-panel').hidden, false);
+    t.close();
+    t = await setup(storage);
+    await waitFor(() => t.$('hgt-list').textContent.includes('test.xyz'));
+    await t.change('terrain-source', 'hgt');
+    t.map.center = [78.005,30.005];
+    await t.click('apply-terrain');
+    assert.match(t.$('terrain-readout').textContent, /15.0 m/);
+    await t.click('clear-dem');
+    assert.match(t.$('terrain-readout').textContent, /unavailable/);
+  } finally { t.close(); }
 });
 test("offline download controls enforce provider permission and tile caps", async () => {
   const t = await setup();

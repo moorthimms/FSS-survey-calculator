@@ -7,10 +7,46 @@ from unittest.mock import patch
 import zipfile
 
 import numpy as np
-from gis_workbench import prepare_vector, prepare_raster, sample_cloud, cloud_geojson, write_copc, vector_layers
+from gis_workbench import prepare_vector, prepare_raster, sample_cloud, cloud_geojson, write_copc, vector_layers, pack_shapefile
 
 
 class GISWorkbenchTests(unittest.TestCase):
+    def test_separate_shapefile_components_require_crs_and_preserve_attributes(self):
+        import geopandas as gpd
+        from shapely.geometry import LineString
+        with tempfile.TemporaryDirectory() as directory:
+            gpd.GeoDataFrame({'kind':['road']},geometry=[LineString([(79,31),(79.001,31.001)])],crs=4326).to_file(Path(directory)/'road.shp')
+            parts=[(p.name,p.read_bytes()) for p in Path(directory).iterdir() if p.suffix!='.prj']
+        data=pack_shapefile(parts)
+        with self.assertRaisesRegex(ValueError,'no CRS'): prepare_vector(data,'.zip')
+        out=prepare_vector(data,'.zip',source_crs='EPSG:4326')
+        self.assertEqual(out['features'][0]['properties']['attributes']['kind'],'road')
+        self.assertEqual(len(out['features'][0]['geometry']['coordinates']),2)
+        with self.assertRaisesRegex(ValueError,'basename'):pack_shapefile([('a.shp',b'a'),('b.shx',b'a'),('a.dbf',b'a')])
+        with self.assertRaisesRegex(ValueError,'directory'):pack_shapefile([('../a.shp',b'a'),('a.shx',b'a'),('a.dbf',b'a')])
+        with self.assertRaisesRegex(ValueError,'Duplicate'):pack_shapefile([('a.shp',b'a'),('a.SHP',b'a'),('a.dbf',b'a')])
+
+    def test_simplification_is_explicit_and_marked_as_display_copy(self):
+        from shapely.geometry import LineString, mapping
+        data=json.dumps({'type':'FeatureCollection','features':[{'type':'Feature','properties':{'name':'road'},'geometry':mapping(LineString([(79+i*.00001,31+i*.00001) for i in range(20)]))}]}).encode()
+        exact=prepare_vector(data,'.geojson')
+        reduced=prepare_vector(data,'.geojson',simplify_m=.1)
+        self.assertEqual(len(exact['features'][0]['geometry']['coordinates']),20)
+        self.assertLess(len(reduced['features'][0]['geometry']['coordinates']),20)
+        self.assertIn('Display copy simplified',reduced['features'][0]['properties']['description'])
+        for tolerance in [-1,float('nan'),101]:
+            with self.assertRaisesRegex(ValueError,'tolerance'):prepare_vector(data,'.geojson',simplify_m=tolerance)
+
+    def test_degenerate_roads_are_removed_only_with_explicit_option(self):
+        raw={'type':'FeatureCollection','features':[
+            {'type':'Feature','properties':{},'geometry':{'type':'LineString','coordinates':[[79,31],[79,31]]}},
+            {'type':'Feature','properties':{},'geometry':{'type':'LineString','coordinates':[[79,31],[79.01,31.01]]}}]}
+        data=json.dumps(raw).encode()
+        with self.assertRaisesRegex(ValueError,'zero-length'):prepare_vector(data,'.geojson')
+        result=prepare_vector(data,'.geojson',drop_degenerate=True)
+        self.assertEqual(len(result['features']),1)
+        self.assertEqual(result['fssPreparation']['removed_zero_length_lines'],1)
+
     def test_geopackage_reprojection_and_field_customization(self):
         import geopandas as gpd
         from shapely.geometry import Point

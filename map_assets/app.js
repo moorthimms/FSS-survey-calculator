@@ -490,7 +490,7 @@
       "center-height",
       h === null
         ? "Ground elevation unavailable"
-        : `Ground elevation: ${h.toFixed(1)} m · ${val("terrain-source") === "hgt" ? "HGT source datum" : "terrain source datum"}`,
+        : `Ground elevation: ${h.toFixed(1)} m · ${val("terrain-source") === "hgt" ? (hgts[0]?.reference || "HGT source datum") : "terrain source datum"}`,
     );
     set("terrain-readout", $("center-height").textContent);
   }
@@ -1229,12 +1229,14 @@
   function applyTerrain() {
     const source = val("terrain-source");
     if (source === "hgt" && !hgts.length)
-      throw Error("Import a valid HGT file first.");
+      throw Error("Import valid HGT or XYZ terrain first.");
     if (
       source !== "hgt" &&
       (checked("terrain-colors") || checked("slope-layer"))
     )
-      throw Error("Terrain color and slope layers require imported HGT.");
+      throw Error("Terrain color and slope layers require imported local terrain.");
+    if (checked("terrain-3d") && map.getProjection?.().type === "globe")
+      throw Error("Choose flat map projection before enabling 3D terrain relief.");
     map.setTerrain(null);
     for (const id of ["dem-hillshade", "dem-colors", "dem-slope"])
       removeLayer(id);
@@ -1256,7 +1258,7 @@
       encoding: source === "hgt" ? "mapbox" : "terrarium",
       attribution:
         source === "hgt"
-          ? "Imported HGT"
+          ? "Imported local DEM"
           : '<a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">Terrain: Mapzen / USGS and contributors</a>',
     });
     if (checked("hillshade"))
@@ -1597,7 +1599,7 @@
           );
         }
         const hs = await dbOp("get", "hgt");
-        if (hs) hgts = hs.map((h) => new C.Hgt(h.name, h.buffer));
+        if (hs) hgts = hs.map((h) => h.kind === "xyz" ? new window.FSSDem.XyzGrid(h.name, h.text, h.options) : new C.Hgt(h.name, h.buffer));
         set(
           "hgt-list",
           hgts.length
@@ -2134,6 +2136,33 @@
     applyTerrain();
   });
   on("apply-terrain", "click", applyTerrain);
+  on("import-xyz", "click", async () => {
+    const file = $("xyz-file").files[0];
+    if (!file) throw Error("Choose an XYZ elevation grid first.");
+    if (file.size > 40 * 1024 * 1024) throw Error("XYZ file limit is 40 MB.");
+    if (!checked("xyz-wgs84")) throw Error("Confirm the source X/Y coordinate system before importing.");
+    const entry = { kind: "xyz", name: file.name, text: await file.text(), options: {
+      crs: "EPSG:4326", units: val("xyz-units"), nodata: val("xyz-nodata").trim(), reference: val("xyz-reference").trim(),
+    }};
+    const grid = new window.FSSDem.XyzGrid(entry.name, entry.text, entry.options);
+    await dbOp("put", "hgt", [entry]);
+    hgts = [grid];
+    set("hgt-list", `${grid.name} · ${grid.width} × ${grid.heightCount} · ${grid.valid} valid heights\n${grid.reference}`);
+    $("terrain-source").value = "hgt";
+    map.easeTo({ center: [(grid.west + grid.east) / 2, (grid.south + grid.north) / 2], zoom: 14 });
+    applyTerrain();
+    persist();
+    say("XYZ terrain imported and saved in this browser. Enable 3D relief or slope colors and apply elevation layers.");
+  });
+  on("terrain-profile-create", "click", () => {
+    const profile = window.FSSDem.terrainProfile(selectedFeature(), hgts, bounded("terrain-profile-spacing", 1, 1000));
+    addFeatures([profile]);
+    select(profile.id);
+    $("profile-x").value = "distance";
+    $("profile-y").value = "height";
+    drawProfile();
+    say("Terrain profile created from local DEM; original route retained.");
+  });
   on("clear-dem", "click", async () => {
     $("cursor-elevation").checked = false;
     $("terrain-source").value = "none";

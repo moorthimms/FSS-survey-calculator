@@ -18,6 +18,32 @@ def check_size(data):
         raise ValueError('Choose a non-empty file up to 80 MB.')
 
 
+def pack_shapefile(parts):
+    """Pack explicitly uploaded sidecars only; never guess a missing CRS."""
+    if not 3 <= len(parts) <= 10:
+        raise ValueError('Select one .shp, .shx and .dbf, plus optional .prj/.cpg/index files.')
+    allowed = {'.shp', '.shx', '.dbf', '.prj', '.cpg', '.qix', '.sbn', '.sbx'}
+    names, stems, suffixes = set(), set(), set()
+    total = 0
+    for name, data in parts:
+        path = Path(name)
+        if path.name != name or '\\' in name or path.suffix.lower() not in allowed:
+            raise ValueError('Select only Shapefile component files, without directory paths.')
+        if name.lower() in names:
+            raise ValueError('Duplicate Shapefile component.')
+        names.add(name.lower()); stems.add(path.stem.lower()); suffixes.add(path.suffix.lower())
+        check_size(data); total += len(data)
+    if len(stems) != 1 or not {'.shp', '.shx', '.dbf'} <= suffixes:
+        raise ValueError('All components must share one basename and include .shp, .shx and .dbf.')
+    if total > MAX_BYTES:
+        raise ValueError('Combined Shapefile limit is 80 MB.')
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as archive:
+        for name, data in parts:
+            archive.writestr(name.lower(), data)
+    return out.getvalue()
+
+
 def vector_path(data, suffix, directory):
     check_size(data)
     if suffix == '.zip':
@@ -51,7 +77,7 @@ def vector_layers(data, suffix):
         return [(str(name), str(kind)) for name, kind in pyogrio.list_layers(path) if kind is not None]
 
 
-def prepare_vector(data, suffix, layer=None, source_crs='', fields=None, primary_key='', case_mode='keep'):
+def prepare_vector(data, suffix, layer=None, source_crs='', fields=None, primary_key='', case_mode='keep', simplify_m=0, drop_degenerate=False):
     import pyogrio
     with tempfile.TemporaryDirectory() as directory:
         path = vector_path(data, suffix, directory)
@@ -76,13 +102,30 @@ def prepare_vector(data, suffix, layer=None, source_crs='', fields=None, primary
     frame=frame.rename(columns=mapping).to_crs(4326).explode(index_parts=False,ignore_index=True)
     if len(frame)>2000: raise ValueError('Exploded geometry exceeds the 2,000-feature map limit.')
     frame=frame[~frame.geometry.is_empty & frame.geometry.notna()]
-    if not frame.geometry.is_valid.all(): raise ValueError('Invalid geometry found. Repair the source geometry before importing.')
+    degenerate = frame.geometry.apply(lambda g: g.geom_type == 'LineString' and g.length == 0)
+    removed = int(degenerate.sum()) if drop_degenerate else 0
+    if drop_degenerate: frame = frame[~degenerate].copy()
+    if frame.empty: raise ValueError('No usable geometry remains.')
+    if not frame.geometry.is_valid.all(): raise ValueError('Invalid geometry found. Repair the source, or explicitly remove zero-length lines if those are the only defects.')
     if not frame.geometry.geom_type.isin(['Point','LineString','Polygon']).all(): raise ValueError('Only point, line and polygon geometry is supported.')
+    if not math.isfinite(simplify_m) or not 0 <= simplify_m <= 100:
+        raise ValueError('Simplification tolerance must be 0–100 metres.')
+    if simplify_m:
+        west, south, east, north = frame.total_bounds
+        if east - west > 6 or south < -80 or north > 84:
+            raise ValueError('Metre simplification requires a local region within six longitude degrees and UTM coverage.')
+        local_crs = frame.estimate_utm_crs()
+        if local_crs is None: raise ValueError('Cannot determine a local metric CRS for simplification.')
+        metric = frame.to_crs(local_crs)
+        metric.geometry = metric.geometry.simplify(simplify_m, preserve_topology=True)
+        frame = metric.to_crs(4326)
     result=json.loads(frame.to_json(na='null',drop_id=True))
     def count(c): return 1 if c and isinstance(c[0],(int,float)) else sum(count(x) for x in c)
-    if sum(count(f['geometry']['coordinates']) for f in result['features'])>50000: raise ValueError('Geometry exceeds 50,000 vertices. Simplify the source first.')
+    if sum(count(f['geometry']['coordinates']) for f in result['features'])>50000: raise ValueError('Geometry exceeds 50,000 vertices. Choose an explicit simplification tolerance or export a smaller region.')
     for f in result['features']:
         props=f['properties'];props['attributes']=dict(props);props['folder']=layer or 'Imported GIS';props['name']=str(props.get('name',props.get(primary_key,'GIS feature')))
+        if simplify_m: props['description'] = f'Display copy simplified with {simplify_m:g} m tolerance in local UTM; retain original for survey work.'
+    result['fssPreparation'] = {'removed_zero_length_lines': removed, 'simplification_metres': simplify_m}
     return result
 
 
@@ -212,22 +255,32 @@ def render_gis_workbench():
     import streamlit as st
     with st.expander('GIS data workbench · Shapefile, GeoPackage, GeoTIFF, PostGIS & point clouds'):
         st.caption('Files in this workbench are uploaded to the app host for conversion. Download the prepared file, then import it using Layers & data → Import vector file in the map. Regular GeoJSON/GPX/KML map imports stay in your browser.')
-        kind=st.selectbox('Data task',['Vector file','GeoTIFF overlay','Point cloud / COPC','Virtual point cloud manifest','Planetary texture scene','PostGIS'],key='gis_data_task')
+        kind=st.selectbox('Data task',['Vector file','Shapefile components','GeoTIFF overlay','Point cloud / COPC','Virtual point cloud manifest','Planetary texture scene','PostGIS','SAAS / MPT migration'],key='gis_data_task')
         try:
-            if kind=='Vector file':
-                file=st.file_uploader('GIS vector file',type=['zip','gpkg','geojson','json'],key='gis_vector')
-                if file:
-                    data=file.getvalue();suffix=Path(file.name).suffix.lower();layers=vector_layers(data,suffix)
+            if kind in ('Vector file', 'Shapefile components'):
+                data = None
+                if kind == 'Shapefile components':
+                    files=st.file_uploader('Select matching Shapefile components together',type=['shp','shx','dbf','prj','cpg','qix','sbn','sbx'],accept_multiple_files=True,key='gis_shape_parts')
+                    st.caption('Include .shp, .shx and .dbf. A missing .prj requires the verified source CRS below; longitude/latitude-looking numbers do not prove WGS84.')
+                    if files: data=pack_shapefile([(f.name,f.getvalue()) for f in files]);suffix='.zip'
+                else:
+                    file=st.file_uploader('GIS vector file',type=['zip','gpkg','geojson','json'],key='gis_vector')
+                    if file: data=file.getvalue();suffix=Path(file.name).suffix.lower()
+                if data:
+                    layers=vector_layers(data,suffix)
                     if not layers:st.info('No spatial layer found.');return
                     layer=st.selectbox('Dataset layer',[n for n,_ in layers],key='gis_dataset_layer')
                     crs=st.text_input('Source CRS if missing (for example EPSG:32644)',key='gis_vector_crs')
                     fields=st.text_input('Keep fields (comma separated; blank keeps all)',key='gis_vector_fields')
                     primary=st.text_input('Primary key (optional)',key='gis_vector_pk')
                     case=st.selectbox('Field case',['keep','lower','upper'],key='gis_vector_case')
+                    simplify=st.number_input('Optional display simplification (metres; 0 preserves vertices)',min_value=0.0,max_value=100.0,value=0.0,step=0.1,key='gis_simplify_m')
+                    discard=st.checkbox('Remove zero-length lines from this prepared copy',key='gis_drop_degenerate')
                     if st.button('Prepare WGS84 GeoJSON',key='gis_prepare_vector'):
-                        result=prepare_vector(data,suffix,layer,crs,[x.strip() for x in fields.split(',') if x.strip()],primary,case)
+                        result=prepare_vector(data,suffix,layer,crs,[x.strip() for x in fields.split(',') if x.strip()],primary,case,simplify,discard)
                         st.download_button('Download prepared GeoJSON',json.dumps(result),'prepared-layer.geojson','application/geo+json')
                         st.success(f"Prepared {len(result['features'])} features. Import this file into the map.")
+                        st.caption(f"Removed {result['fssPreparation']['removed_zero_length_lines']} zero-length lines; simplification tolerance {simplify:g} m. Original files are unchanged.")
             elif kind=='GeoTIFF overlay':
                 file=st.file_uploader('GeoTIFF',type=['tif','tiff'],key='gis_tif')
                 if file and st.button('Prepare raster overlay',key='gis_prepare_raster'):
@@ -263,6 +316,12 @@ def render_gis_workbench():
                     for f in manifest.get('features',[]):
                         for name,a in f.get('assets',{}).items():rows.append({'item':str(f.get('id','')),'asset':name,'href':str(a.get('href',''))})
                     st.dataframe(rows)
+            elif kind=='SAAS / MPT migration':
+                st.info('Windows EXE/DLL files and MPT/FLY projects cannot be loaded by this web map. They require their native runtime or a compatible publishing/export workflow.')
+                st.markdown('**Use existing data:** upload Shapefile components here; import regular WGS84 XYZ grids directly in **Elevation & terrain**; prepare GeoTIFF imagery here; import GPX/KML/GeoJSON in **Layers & data**.')
+                st.markdown('**MPT terrain:** publish through a compatible SkylineGlobe Server. Add the resulting HTTPS WMS imagery service in **Layers & data**, using its actual layer name, EPSG:3857 support and attribution. WMS imagery does not supply DEM heights. A Google Drive download URL is not a map service.')
+                st.caption('Native 3D-model viewsheds, route viewsheds, cut/fill volumes, least-cost paths, time animation and movie creation are not ported. FSS project backups do not read or write FLY files.')
+                st.link_button('Skyline publishing and service documentation','https://www.skylinesoft.com/KB_Resources/SGS/WebHelp/UserGuide/What_is_SkylineGlobe_Server.html')
             else:
                 if not os.environ.get('FSS_POSTGIS_DSN'):st.info('PostGIS requires a host-configured read-only FSS_POSTGIS_DSN connection. No database password is stored in the browser.');return
                 layers=postgis_layers()

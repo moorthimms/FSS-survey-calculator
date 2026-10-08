@@ -48,7 +48,7 @@ def map_html():
     styles = '\n'.join((ASSETS / p).read_text() for p in ('vendor/maplibre-gl.css', 'style.css'))
     scripts = '\n'.join((ASSETS / 'vendor' / p).read_text() for p in VENDORS)
     scripts += '\nwindow.FSS_CONFIG = ' + json.dumps(config).replace('<', '\\u003c') + ';\n'
-    scripts += '\n'.join((ASSETS / p).read_text() for p in ('core.js', 'files.js', 'advanced-core.js', 'advanced.js', 'app.js'))
+    scripts += '\n'.join((ASSETS / p).read_text() for p in ('core.js', 'files.js', 'dem.js', 'advanced-core.js', 'advanced.js', 'app.js'))
     # Vendor bundles can contain literal HTML strings. Escape closing script tags.
     scripts = scripts.replace('</script', '<\\/script')
     return page.replace('/* FSS_STYLES */', styles).replace('/* FSS_SCRIPTS */', scripts)
@@ -56,14 +56,21 @@ def map_html():
 
 def render_map_workspace():
     st.subheader('Map')
-    view = st.radio('Map workspace', ['Field workspace', 'Google Maps'], horizontal=True, key='map_engine')
+    view = st.radio('Map workspace', ['Field workspace', 'Advanced GIS / 3D', 'Google Maps'], horizontal=True, key='map_engine')
     if view == 'Google Maps':
         from google_workspace import render_google_workspace
         render_google_workspace()
         return
-    from simple_map import simple_map_html
-    page = simple_map_html(map_config())
+    if view == 'Advanced GIS / 3D':
+        st.caption('Layers, offline terrain, GIS analysis and map export. Compact-map markers can be exported as GeoJSON and imported here; each workspace retains its own saved data.')
+        page = map_html()
+    else:
+        from simple_map import simple_map_html
+        page = simple_map_html(map_config())
     if hasattr(st, "iframe"):
         st.iframe(page, height=980)
     else:
         components.html(page, height=980, scrolling=True)
+    if view == 'Advanced GIS / 3D':
+        from gis_workbench import render_gis_workbench
+        render_gis_workbench()
